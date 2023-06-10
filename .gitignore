@@ -1,0 +1,8 @@
+.DS_store
+.Rhistory
+.ipynb_checkpoints
+*scratch.ipynb
+*scratch.py
+workspace_wdS
+workspace
+*.swp
