@@ -29,10 +29,9 @@ def spherical_to_cartesian(ang_coord_sample):
 def generate_surface(job):
     sp = job.sp
 
-    # Read in non-spatial jacobian from shared data
-    sd_fn = project.fn('shared_data.h5')
-    with sg.H5Store(sd_fn).open(mode='r') as sd:
-        J_sub = np.array(sd['J_mats'])[sp['J_i']]
+    # Read in non-spatial jacobian from job data
+    with job.data:
+        J_sub = np.array(job.data['J_sub'])
 
     # Define sympy symbols
     kappa, lamda = sy.symbols("kappa lamda")
