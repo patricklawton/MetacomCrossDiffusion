@@ -3,11 +3,8 @@
 .ipynb_checkpoints
 *scratch.ipynb
 *scratch.py
-workspace_wdS
-workspace
 *.swp
-*.gitignore
+./.gitignore
 *Nn1e2.pkl
-workspace_chain
-workspace_copy
+workspace*
 *test.pkl
