@@ -1,2 +1,5 @@
 project = None
 schema_version = 1
+workspace_dir = workspace
+[General]
+[hosts]
