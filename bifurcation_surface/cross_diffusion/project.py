@@ -53,11 +53,10 @@ def generate_surface(job):
     M_sub = J_sub - kappa*C
 
     # Get oscillatory and stationary pattern-forming instability conditions
-    '''Assuming non-spatially stable -> values J[i,j] where C[i,j] != 0 don't change conditions'''
     M_star = sy.zeros(3,3)
     for i,j in product(range(C.shape[0]), repeat=2):
         if C[i,j] != 0:
-            M_star[i,j] = -C[i,j]*kappa
+            M_star[i,j] = J_sub[i,j] - C[i,j]*kappa
         else:
             M_star[i,j] = J_sub[i,j]
     p = M_star.charpoly(lamda) #characteristic polynomial
