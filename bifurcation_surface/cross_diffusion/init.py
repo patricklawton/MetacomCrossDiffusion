@@ -1,22 +1,21 @@
 import numpy as np
 import sympy as sy
-import signac
+import signac as sg
 from itertools import product, combinations
 from math import comb
 
-# Initialize signac project (i.e. create workspace dir)
-project = signac.init_project()
+# Initialize sg project (i.e. create workspace dir)
+project = sg.init_project()
 
-# Write adjacency matrices and module labels to file
+# Write adjacency matrices and module labels to project level data
 modules = np.array(['chain', 'exploitative', 'apparent', 'omnivory'])
-with signac.H5Store(project.fn('shared_data.h5')).open(mode='w') as shared_data:
-    shared_data['adj_mats'] =  np.array([ 
-        [[0.,1,0],[0,0,1],[0,0,0]],
-        [[0,1,1],[0,0,0],[0,0,0]],
-        [[0,0,1],[0,0,1],[0,0,0]],
-        [[0,1,1],[0,0,1],[0,0,0]]
-        ])
-    shared_data['modules'] = [str(module) for module in modules]
+project.data['modules'] = [str(module) for module in modules]
+project.data['adj_mats'] =  np.array([ 
+    [[0.,1,0],[0,0,1],[0,0,0]],
+    [[0,1,1],[0,0,0],[0,0,0]],
+    [[0,0,1],[0,0,1],[0,0,0]],
+    [[0,1,1],[0,0,1],[0,0,0]]
+    ])
 
 # Other statepoint parameters to combine 
 N_ns = [1e2] #Avg density of samples per 0-pi/2 interval
@@ -24,7 +23,8 @@ C_offdiags = [(0,1), (0,2),
               (1,0), (1,2),
               (2,0), (2,1)]
 #n_cross_arr = [i+1 for i in range(6)] #Number of nonzero cross dispersal elements
-n_cross_arr = [0, 1]
+n_cross_arr = [0,1]
+methods = ['numeric']
 
 # Define sympy symbols
 u, w, v = sy.symbols("u w v")
@@ -32,13 +32,14 @@ r_u, r_v, K_u, K_v, A_uv, A_uw, A_vw, B_uv, B_uw, B_vw = sy.symbols('r_u, r_v, K
 d_v, d_w, e_uv, e_uw, e_vw = sy.symbols('d_v, d_w, e_uv, e_uw, e_vw')
 
 # Constants
-num_parameterizations = 1e2 
+num_parameterizations = 1e3 
 num_jobs = sum([comb(len(C_offdiags),n_cross)*len(modules)*num_parameterizations for n_cross in n_cross_arr])
 #print(num_jobs)
 #import sys; sys.exit()
 x0_trials = 10
 model_params = [r_u, r_v, K_u, K_v, A_uv, A_uw, A_vw, B_uv, B_uw, B_vw, d_v, d_w, e_uv, e_uw, e_vw]
 
+'''Should write function to find if given param set exists and set param_i'''
 param_i = 0
 while len(project) < num_jobs:
     J_mats = np.zeros((len(modules), 3, 3))
@@ -102,14 +103,14 @@ while len(project) < num_jobs:
                     J_star = sy.Matrix([[sy.diff(f, u), sy.diff(f, v), sy.diff(f, w)],
                                    [sy.diff(g, u), sy.diff(g, v), sy.diff(g, w)],
                                    [sy.diff(h, u), sy.diff(h, v), sy.diff(h, w)]])
-                    J_sub = J_star.subs(param_vals + [(u, u_0), (v, v_0), (w, w_0)])
+                    J = J_star.subs(param_vals + [(u, u_0), (v, v_0), (w, w_0)])
                     # Check for stability
-                    evs = np.array([complex(val) for val in J_sub.eigenvals()])
+                    evs = np.array([complex(val) for val in J.eigenvals()])
                     if np.any(np.real(evs) > 0):
                         ev_checks[module_i] = False
                         continue
                     else:
-                        J_mats[module_i] = np.array(J_sub).astype(np.float64)
+                        J_mats[module_i] = np.array(J).astype(np.float64)
                         ev_checks[module_i] = True
             if np.all(ev_checks):
                 param_i += 1
@@ -121,11 +122,12 @@ while len(project) < num_jobs:
             cross_combs = [[]]
         else:
             cross_combs = [comb for comb in combinations(C_offdiags, n_cross)]
-        for module, C_ijs, N_n in product(modules, cross_combs, N_ns):
-            sp = {'module': module, 'C_ijs': C_ijs, 'N_n': N_n, 
-                  'x0': x0, 'model_params': {}, 'param_i': param_i}
+        for module, C_ijs, N_n, method in product(modules, cross_combs, 
+                                                  N_ns, methods):
+            sp = {'module': module, 'C_ijs': C_ijs, 'N_n': N_n, 'x0': x0, 
+                  'model_params': {}, 'param_i': param_i, 'method': method}
             for key, val in param_vals:
                 sp['model_params'][sy.sstr(key)] = val
             job = project.open_job(sp)
             job.init()
-            job.data['J_sub'] = J_mats[modules == module][0]
+            job.data['J'] = J_mats[modules == module][0]

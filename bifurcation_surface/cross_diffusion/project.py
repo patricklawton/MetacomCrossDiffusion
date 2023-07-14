@@ -1,16 +1,16 @@
 import numpy as np
 import sympy as sy
 import signac as sg
+import sys
 from flow import FlowProject
 from itertools import product
 
 project = sg.get_project()
 
-# Read in module info from shared data
-sd_fn = project.fn('shared_data.h5')
-with sg.H5Store(sd_fn).open(mode='r') as sd:
-    adj_mats = np.array(sd['adj_mats'])
-    modules = np.array([i.decode() for i in sd['modules']])
+# Read in adjacency matrices and module labels from project data
+with project.data:
+    modules = np.array([i.decode() for i in project.data['modules']])
+    adj_mats = np.array(project.data['adj_mats'])
 
 def spherical_to_cartesian(ang_coord_sample):
     cart_vec = []
@@ -33,70 +33,64 @@ def spherical_to_cartesian(ang_coord_sample):
 @FlowProject.post(lambda job: job.doc.get('surface_generated'))
 @FlowProject.operation
 def generate_surface(job):
-    import timeit
-    start = timeit.default_timer()
+    import timeit; start = timeit.default_timer()
     sp = job.sp
 
     # Read in non-spatial jacobian from job data
     with job.data:
-        J_sub = np.array(job.data['J_sub'])
+        J = np.array(job.data['J'])
 
-    # Define sympy symbols
-    kappa, lamda = sy.symbols("kappa lamda")
-    J11, J12, J13, J21, J22, J23, J31, J32, J33 = sy.symbols('J11 J12 J13 J21 J22 J23 J31 J32 J33')
-    C11, C12, C13, C21, C22, C23, C31, C32, C33 = sy.symbols('C11 C12 C13 C21 C22 C23 C31 C32 C33')
+    # Make list for nonzero elements of C
+    C_nonzero = [list(C_ij) for C_ij in job.sp['C_ijs']] + [[i,i] for i in range(3)]
 
-    # Construct metacommunity jacobian with symbolic dispersal entries
-    J = sy.Matrix([[J11, J12, J13], 
-                   [J21, J22, J23],
-                   [J31, J32, J33]])
-    C = sy.Matrix([[C11, C12, C13],
-                   [C21, C22, C23],
-                   [C31, C32, C33]])
-    for i, j in product(range(C.shape[0]), repeat=2):
-        if (i != j) and ([i,j] not in sp['C_ijs']):
-            C[i,j] = 0.0
-    M_sub = J_sub - kappa*C
+    if sp['method'] == 'symbolic':
+        # Initialize data	
+        data = {'kappa_cs': {'wav': [], 'st': []},
+                'omega_integrand': {'wav': [], 'st': [], 'stab': []}}
+        # Define sympy symbols
+        kappa, lamda = sy.symbols("kappa lamda")
+        C11, C12, C13, C21, C22, C23, C31, C32, C33 = sy.symbols('C11 C12 C13 C21 C22 C23 C31 C32 C33')
+        # Construct connectivity matrix 
+        C = sy.Matrix([[C11, C12, C13],
+                       [C21, C22, C23],
+                       [C31, C32, C33]])
+        for i, j in product(range(C.shape[0]), repeat=2):
+            if (i != j) and ([i,j] not in sp['C_ijs']):
+                C[i,j] = 0.0
+        # Make list of nonzero C matrix symbols
+        C_k = [C[i,j] for i, j in C_nonzero]
+        # Construct metacommunity jacobian with symbolic dispersal entries
+        M = sy.Matrix(J - kappa*C)
+        # Get oscillatory and stationary pattern-forming instability conditions
+        p = M.charpoly(lamda) #characteristic polynomial
+        p_coeffs = p.all_coeffs()
+        I_wav = p_coeffs[3] - p_coeffs[1]*p_coeffs[2] #oscillatory
+        I_st = p_coeffs[3] #stationary
+    elif sp['method'] == 'numeric':
+        # Initialize data
+        data = {'kappa_cs': [], 'omega_integrand': {'ddi': [], 'stab': []}}
+        # Define array of kappa values to compute eigenvalues at
+        kappas = np.arange(1e4)
+    else:
+        sys.exit('Invalid critical kappa computation method')
 
-    # Get oscillatory and stationary pattern-forming instability conditions
-    M_star = sy.zeros(3,3)
-    for i,j in product(range(C.shape[0]), repeat=2):
-        if C[i,j] != 0:
-            M_star[i,j] = J_sub[i,j] - C[i,j]*kappa
-        else:
-            M_star[i,j] = J_sub[i,j]
-    p = M_star.charpoly(lamda) #characteristic polynomial
-    p_coeffs = p.all_coeffs()
-    I_wav = p_coeffs[3] - p_coeffs[1]*p_coeffs[2] #oscillatory
-    I_st = p_coeffs[3] #stationary
 
-    # Make lists for spatially dependent elements of C, J, and M
-    C_k, M_sub_k, J_k, J_sub_k = ([],[],[],[])
-    C_nonzero_indices = [list(C_ij) for C_ij in job.sp['C_ijs']] + [[i,i] for i in range(3)]
-    for i, j in C_nonzero_indices:
-            C_k.append(C[i,j])
-            M_sub_k.append(M_sub[i,j])
-            J_k.append(J[i,j])
-            J_sub_k.append(J_sub[i,j])
-
-    # Initialize data	
-    data = {'kappa_cs': {'wav': [], 'st': []},
-            'omega_integrand': {'wav': [], 'st': [], 'stab': []}}
-    ang_coords = ['phi_{}'.format(i+1) for i in range(len(C_k)-1)]
+    # Add angular coordinates spanning dispersal coefficient space to data
+    ang_coords = ['phi_{}'.format(i+1) for i in range(len(C_nonzero)-1)]
     for ang_coord in ang_coords:
         data.update({ang_coord: []})
-    cart_coords = [sy.sstr(C_ij) for C_ij in C_k]
-    #for cart_coord in cart_coords:
-    #    data.update({cart_coord: []})
 
-    # Sample n dimensional dispersal parameter space in (n-1) spherical coordinates
-    #while len(data[ang_coords[0]]) < (2**len(C_k))*sp.N_n:
+    # Get the total number of C matrix samples
+    'Use this if sampling all sign permutations`'
+    #total_samples = 2**len(C_nonzero) * sp.N_n
+    'Use this if constraining diagonal C elements to positive'
     if len(sp['C_ijs']) == 0:
         total_samples = 3*sp.N_n
     else:
-        total_samples = (2**(len(C_k)-3) + 3)*sp.N_n
+        total_samples = (2**(len(C_nonzero)-3) + 3)*sp.N_n
+
+    # Sample n dimensional dispersal parameter space in (n-1) spherical coordinates
     while len(data[ang_coords[0]]) < total_samples:
-        # Sample and store directional data
         ang_coord_sample = []
         for i, ang_coord in enumerate(ang_coords):
             if len(sp['C_ijs']) == 0:
@@ -117,52 +111,82 @@ def generate_surface(job):
             data[ang_coords[i]].append(coord)
         # Convert spherical to cartesian coordinates
         cart_coord_sample = spherical_to_cartesian(ang_coord_sample)
-        #for i, coord in enumerate(cart_coord_sample):
-        #    data[cart_coords[i]].append(coord)
-
-        # Find and store critical kappa values for this parameterization
-        kappa_wavs, kappa_sts = ([], [])
-        I_wav_sub = I_wav.subs([(C_k[i], cart_coord_sample[i]) for i in range(len(C_k))])
-        I_st_sub = I_st.subs([(C_k[i], cart_coord_sample[i]) for i in range(len(C_k))])
-        try:
-            wav_sols = sy.solveset(I_wav_sub, kappa).args
-            st_sols = sy.solveset(I_st_sub, kappa).args
-        except:
-            wav_sols, st_sols = ([np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan])
-        for sol in wav_sols:
+        
+        # Solve for critical kappas symbolically
+        if job.sp['method'] == 'symbolic':
+            kappa_wavs, kappa_sts = ([], [])
+            I_wav_sub = I_wav.subs([(C_k[i], cart_coord_sample[i]) for i in range(len(C_k))])
+            I_st_sub = I_st.subs([(C_k[i], cart_coord_sample[i]) for i in range(len(C_k))])
             try:
-                kappa_wavs.append(float(sol))
+                wav_sols = sy.solveset(I_wav_sub, kappa).args
+                st_sols = sy.solveset(I_st_sub, kappa).args
             except:
-                kappa_wavs.append(complex(sol))
-        for sol in st_sols:
-            try:
-                kappa_sts.append(float(sol))
-            except:
-                kappa_sts.append(complex(sol))
-        for cond, kappa_arr in zip(['wav', 'st'], [kappa_wavs, kappa_sts]):
-            kappa_c_dir = []
-            for kappa_c in kappa_arr:
-                if np.isreal(kappa_c) and (kappa_c > 0):
-                    kappa_c_dir.append(kappa_c)
-                else:
-                    kappa_c_dir.append(np.nan)
-            data['kappa_cs'][cond].append(kappa_c_dir)
+                wav_sols, st_sols = ([np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan])
+            for sol in wav_sols:
+                try:
+                    kappa_wavs.append(float(sol))
+                except:
+                    kappa_wavs.append(complex(sol))
+            for sol in st_sols:
+                try:
+                    kappa_sts.append(float(sol))
+                except:
+                    kappa_sts.append(complex(sol))
+            for cond, kappa_arr in zip(['wav', 'st'], [kappa_wavs, kappa_sts]):
+                kappa_c_dir = []
+                for kappa_c in kappa_arr:
+                    if np.isreal(kappa_c) and (kappa_c > 0):
+                        kappa_c_dir.append(kappa_c)
+                    else:
+                        kappa_c_dir.append(np.nan)
+                data['kappa_cs'][cond].append(kappa_c_dir)
 
-        # Store linear stability type (Omega integrand)
-        #for i in range(len(data[ang_coords[0]])):
-        wav_nonan = [val for val in data['kappa_cs']['wav'][-1] if not np.isnan(val)]
-        st_nonan = [val for val in data['kappa_cs']['st'][-1] if not np.isnan(val)]
-        wav = len(wav_nonan) > 0
-        st = len(st_nonan) > 0
-        if wav and st:
-            wav_before_st = min(wav_nonan) < min(st_nonan)
-            st_before_wav = min(st_nonan) < min(wav_nonan)
-        else:
-            wav_before_st = wav
-            st_before_wav = st
-        data['omega_integrand']['wav'].append(wav_before_st)
-        data['omega_integrand']['st'].append(st_before_wav)
-        data['omega_integrand']['stab'].append((wav == False) and (st == False))
+            # Store linear stability type (Omega integrand)
+            wav_nonan = [val for val in data['kappa_cs']['wav'][-1] if not np.isnan(val)]
+            st_nonan = [val for val in data['kappa_cs']['st'][-1] if not np.isnan(val)]
+            wav = len(wav_nonan) > 0
+            st = len(st_nonan) > 0
+            if wav and st:
+                wav_before_st = min(wav_nonan) < min(st_nonan)
+                st_before_wav = min(st_nonan) < min(wav_nonan)
+            else:
+                wav_before_st = wav
+                st_before_wav = st
+            data['omega_integrand']['wav'].append(wav_before_st)
+            data['omega_integrand']['st'].append(st_before_wav)
+            data['omega_integrand']['stab'].append((wav == False) and (st == False))
+
+        # Solve for critical kappas numerically
+        if job.sp['method'] == 'numeric':
+            # Initialize data to store critical kappas
+            '''I think there can at most be 6 critical kappas for 3 species'''
+            kappa_crits = [np.nan for i in range(6)]
+            kappa_c_idx = 0
+            # Construct connectivity matrix
+            C = np.zeros(J.shape)
+            for coord_idx, C_idx in enumerate(C_nonzero):
+                i, j = C_idx
+                C[i,j] = cart_coord_sample[coord_idx]   
+            # Function to return True if any real eig val components positive
+            check_evs = lambda k: np.any(np.linalg.eigvals(J - k*C).real > 0)
+            # Initialize ddi boolean variables
+            ddi = False 
+            pos_ev = False 
+            data['omega_integrand']['stab'].append(ddi == False)
+            data['omega_integrand']['ddi'].append(ddi)
+            # Check community matrix eigenvalues at each kappa
+            for k in kappas:
+                pos_ev_prev = pos_ev
+                pos_ev = check_evs(k)
+                # If sign of max eigenvalue switched, critical kappa
+                if pos_ev_prev != pos_ev:
+                    ddi = True
+                    kappa_crits[kappa_c_idx] = k
+                    kappa_c_idx += 1
+            data['kappa_cs'].append(kappa_crits)
+            if ddi:
+                data['omega_integrand']['stab'][-1] = False
+                data['omega_integrand']['ddi'][-1] = True
 
     # Store all job data
     for key, item in data.items():
@@ -172,8 +196,7 @@ def generate_surface(job):
         else:
             job.data[key] = np.array(item)
     job.doc['surface_generated'] = True
-    stop = timeit.default_timer()
-    #print('Time:', stop - start)
+    stop = timeit.default_timer(); print('Time:', stop - start)
 
 @FlowProject.pre(lambda job: job.doc.get('surface_generated'))
 @FlowProject.post(lambda job: job.doc.get('data_processed'))
@@ -194,7 +217,10 @@ def process_data(job):
             if np.all(cond == False):
                 omega_sec_mat[phi_lims] = np.nan
             else:
-                omega_integrand_sec = np.array(job.data['omega_integrand/wav'])[cond] + np.array(job.data['omega_integrand/st'])[cond]
+                if job.sp['method'] == 'symbolic':
+                    omega_integrand_sec = np.array(job.data['omega_integrand/wav'])[cond] + np.array(job.data['omega_integrand/st'])[cond]
+                elif job.sp['method'] == 'numeric':
+                    omega_integrand_sec = np.array(job.data['omega_integrand/ddi'])[cond]
                 omega_sec_mat[phi_lims] = sum(omega_integrand_sec) / sum(cond)
         job.data['omega_sec_mat'] = omega_sec_mat
         '''For now below only works for 1 cross element'''
