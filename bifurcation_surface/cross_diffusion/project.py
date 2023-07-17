@@ -277,7 +277,6 @@ def store_omega_in_doc(job):
                 all_constraints.append(phi_i < limit[1])
             constraint = np.all(all_constraints, axis=0)
             if sum(constraint) != 0:
-                print(sum(constraint))
                 omega_constrained = sum(ddi[constraint]) / sum(constraint)
             else:
                 omega_constrained = 0.0

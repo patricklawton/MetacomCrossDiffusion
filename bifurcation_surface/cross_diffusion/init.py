@@ -47,20 +47,20 @@ while len(project) < num_jobs:
         R_vw = A_vw/(v+B_vw)
         if module == 'chain':
             f = u * (G_u - v*R_uv)
-            g = v * (e_uv*R_uv - v*d_v - w*R_vw)
-            h = w * (e_vw*R_vw - w*d_w)
+            g = v * (u*e_uv*R_uv - d_v - w*R_vw)
+            h = w * (v*e_vw*R_vw - d_w)
         if module == 'exploitative':
             f = u * (G_u - v*R_uv - w*R_uw)
-            g = v * (e_uv*R_uv - v*d_v)
-            h = w * (e_uw*R_uw - w*d_w)
+            g = v * (u*e_uv*R_uv - d_v)
+            h = w * (u*e_uw*R_uw - d_w)
         if module == 'apparent':
             f = u * (G_u - w*R_uw)
             g = v * (G_v - w*R_vw)
-            h = w * (e_uw*R_uw + e_vw*R_vw - w*d_w)
+            h = w * (u*e_uw*R_uw + v*e_vw*R_vw - d_w)
         if module == 'omnivory':
             f = u * (G_u - v*R_uv - w*R_uw)
-            g = v * (e_uv*R_uv - w*R_vw - v*d_v)
-            h = w * (e_uw*R_uw + e_vw*R_vw - w*d_w)
+            g = v * (u*e_uv*R_uv - w*R_vw - d_v)
+            h = w * (u*e_uw*R_uw + v*e_vw*R_vw - d_w)
         # Look for a parameterization with a stable steady state
         ev_check = False
         while not ev_check:
