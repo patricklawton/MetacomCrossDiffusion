@@ -238,7 +238,7 @@ def store_omega_in_doc(job):
 
             # Set constraints on the elements of C
             # Diagonal C elements (phi_(n-2), phi_(n-1)) > 0
-            phi_diag_limits = [(np.pi/2, np.pi), (np.pi, 3*np.pi/4)]
+            phi_diag_limits = [(np.pi/2, np.pi), (np.pi, 3*np.pi/2)]
             # Off-diagonals opposite sign of species interaction
             phi_cross_limits = []
             for Cij in Cij_arr:
@@ -251,8 +251,6 @@ def store_omega_in_doc(job):
                 elif adj[j,i] == 1.0:
                     phi_lim = (0.0, np.pi/2)
                 # Some special cases where C_ij != 0 for indirect interactions
-                # For all cases besides those specified below, 
-                # i.e. Cuw and Cwu in chain module, C_ij = 0'
                 else:
                     # Negative interaction btwn predators in exploitative -> C_ij > 0
                     if (job.sp.module == 'exploitative') and (Cij in [(1,2), (2,1)]):
@@ -261,6 +259,9 @@ def store_omega_in_doc(job):
                     #'''Not very confident about this assumption'''
                     elif (job.sp.module == 'apparent') and (Cij in [(0,1), (1,0)]):
                         phi_lim = (np.pi/2, np.pi)
+                    # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, C_ij = 0
+                    else:
+                        phi_lim = (np.nan, np.nan)
                 phi_cross_limits.append(phi_lim)
              
             # Calculate omega for constrained and unconstrained cases
@@ -269,52 +270,28 @@ def store_omega_in_doc(job):
             elif job.sp['method'] == 'numeric':
                 ddi = np.array(job.data[Cij_key]['omega_integrand/ddi'])
             else: sys.exit('Invalid critical kappa computation method')
-            all_constraints = [] 
-            phi_limits = phi_cross_limits + phi_diag_limits
-            for i, limit in enumerate(phi_limits):
-                phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
-                all_constraints.append(phi_i > limit[0])
-                all_constraints.append(phi_i < limit[1])
-            constraint = np.all(all_constraints, axis=0)
-            if sum(constraint) != 0:
-                omega_constrained = sum(ddi[constraint]) / sum(constraint)
+            # Store nan for any cases with invalid constraints
+            if np.any(np.all(np.isnan(phi_cross_limits), axis=1)):
+                omega_constrained = np.nan
+            # Otherwise calculate the constrained value
             else:
-                omega_constrained = 0.0
-            if len(ddi) != 0:
-                omega_unconstrained = np.mean(ddi) / len(ddi)
-            else:
-                omega_unconstrained = 0.0
+                all_constraints = [] 
+                phi_limits = phi_cross_limits + phi_diag_limits
+                for i, limit in enumerate(phi_limits):
+                    phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
+                    all_constraints.append(phi_i > limit[0])
+                    all_constraints.append(phi_i < limit[1])
+                constraint = np.all(all_constraints, axis=0)
+                if sum(constraint) != 0:
+                    omega_constrained = np.mean(ddi[constraint])
+                # If there's no data within the constraints, store nan, but this shouldn't happen
+                else:
+                    omega_constrained = np.nan
+            omega_unconstrained = np.mean(ddi)
             
             # Store in job document
             job.doc['omega_constrained'][Cij_key] = omega_constrained 
             job.doc['omega_unconstrained'][Cij_key] = omega_unconstrained 
-
-#@FlowProject.pre(lambda job: job.doc.get('surface_generated'))
-#@FlowProject.post(lambda job: job.doc.get('data_processed'))
-#@FlowProject.operation
-#def process_data(job):
-#    with job.data:
-#        C_ijs = list(job.sp['C_ijs'])
-#        data_shape = [2 if i < (len(C_ijs) + 1) else 4 for i in range(len(C_ijs) + 2)]
-#        omega_sec_mat = np.zeros(data_shape)
-#        # Loop over parameter space sections
-#        for phi_lims in product(*[list(range(dim)) for dim in data_shape]):
-#            conds = []
-#            for lim_i, lim in enumerate(phi_lims):
-#                conds.append(np.array(job.data['phi_'+str(lim_i+1)]) > lim*np.pi/2)
-#                conds.append(np.array(job.data['phi_'+str(lim_i+1)]) < (lim + 1)*np.pi/2)
-#            # Find indices where angular coordinates are all within section ranges
-#            cond = np.all(conds, axis=0)
-#            if np.all(cond == False):
-#                omega_sec_mat[phi_lims] = np.nan
-#            else:
-#                if job.sp['method'] == 'symbolic':
-#                    omega_integrand_sec = np.array(job.data['omega_integrand/wav'])[cond] + np.array(job.data['omega_integrand/st'])[cond]
-#                elif job.sp['method'] == 'numeric':
-#                    omega_integrand_sec = np.array(job.data['omega_integrand/ddi'])[cond]
-#                omega_sec_mat[phi_lims] = sum(omega_integrand_sec) / sum(cond)
-#        job.data['omega_sec_mat'] = omega_sec_mat
-#    job.doc['data_processed'] = True
 
 if __name__ == "__main__":
     FlowProject().main()
