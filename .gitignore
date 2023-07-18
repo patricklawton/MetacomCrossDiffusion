@@ -12,3 +12,4 @@ random_matrix*
 *.docx
 nonzero*.csv
 __pycache__
+runandstore.sh
