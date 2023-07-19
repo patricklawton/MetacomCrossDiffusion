@@ -8,8 +8,9 @@
 *Nn1e2.pkl
 workspace*
 *test.pkl
-random_matrix*
+random_matrix*.pkl
 *.docx
 nonzero*.csv
 __pycache__
 runandstore.sh
+testing.ipynb
