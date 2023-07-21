@@ -230,39 +230,41 @@ def store_omega_in_doc(job):
         job.doc['omega_unconstrained'] = {}
 
         # Loop over cross diffusion scenarios, stored as keys in job data
-        drop = {'J', 'diag'}
+        drop = {'J'}
         Cij_keys = [key for key in list(job.data.keys()) if key not in drop]
         for Cij_key in Cij_keys:
-            # Convert key to a list of off-diagonal C element indices
-            Cij_arr = [(int(e[0]), int(e[1])) for e in Cij_key.split(',')]
-
             # Set constraints on the elements of C
-            # Diagonal C elements (phi_(n-2), phi_(n-1)) > 0
+            # Diagonal elements (phi_(n-2), phi_(n-1)) always > 0
             phi_diag_limits = [(np.pi/2, np.pi), (np.pi, 3*np.pi/2)]
-            # Off-diagonals opposite sign of species interaction
-            phi_cross_limits = []
-            for Cij in Cij_arr:
-                i, j = Cij
-                adj = adj_mats[modules==job.sp.module][0]
-                # j feeds on i -> C_ij > 0
-                if adj[i,j] == 1.0:
-                    phi_lim = (np.pi/2, np.pi)
-                # i feeds on j -> C_ij < 0
-                elif adj[j,i] == 1.0:
-                    phi_lim = (0.0, np.pi/2)
-                # Some special cases where C_ij != 0 for indirect interactions
-                else:
-                    # Negative interaction btwn predators in exploitative -> C_ij > 0
-                    if (job.sp.module == 'exploitative') and (Cij in [(1,2), (2,1)]):
+            # Constrain off-diagonals to opposite sign of species interaction
+            if Cij_key == 'diag':
+                phi_cross_limits = [[]]
+            else:
+                # Convert key to a list of off-diagonal C element indices
+                Cij_arr = [(int(e[0]), int(e[1])) for e in Cij_key.split(',')]
+                phi_cross_limits = []
+                for Cij in Cij_arr:
+                    i, j = Cij
+                    adj = adj_mats[modules==job.sp.module][0]
+                    # j feeds on i -> C_ij > 0
+                    if adj[i,j] == 1.0:
                         phi_lim = (np.pi/2, np.pi)
-                    # Negative interaction btwn prey in apparent -> C_ij > 0
-                    #'''Not very confident about this assumption'''
-                    elif (job.sp.module == 'apparent') and (Cij in [(0,1), (1,0)]):
-                        phi_lim = (np.pi/2, np.pi)
-                    # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, C_ij = 0
+                    # i feeds on j -> C_ij < 0
+                    elif adj[j,i] == 1.0:
+                        phi_lim = (0.0, np.pi/2)
+                    # Some special cases where C_ij != 0 for indirect interactions
                     else:
-                        phi_lim = (np.nan, np.nan)
-                phi_cross_limits.append(phi_lim)
+                        # Negative interaction btwn predators in exploitative -> C_ij > 0
+                        if (job.sp.module == 'exploitative') and (Cij in [(1,2), (2,1)]):
+                            phi_lim = (np.pi/2, np.pi)
+                        # Negative interaction btwn prey in apparent -> C_ij > 0
+                        #'''Not very confident about this assumption'''
+                        elif (job.sp.module == 'apparent') and (Cij in [(0,1), (1,0)]):
+                            phi_lim = (np.pi/2, np.pi)
+                        # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, C_ij = 0
+                        else:
+                            phi_lim = (np.nan, np.nan)
+                    phi_cross_limits.append(phi_lim)
              
             # Calculate omega for constrained and unconstrained cases
             if job.sp['method'] == 'symbolic':
@@ -270,7 +272,7 @@ def store_omega_in_doc(job):
             elif job.sp['method'] == 'numeric':
                 ddi = np.array(job.data[Cij_key]['omega_integrand/ddi'])
             else: sys.exit('Invalid critical kappa computation method')
-            # Store nan for any cases with invalid constraints
+            # Store nan for any cases with invalid/nonexistent constraints
             if np.any(np.all(np.isnan(phi_cross_limits), axis=1)):
                 omega_constrained = np.nan
             # Otherwise calculate the constrained value
