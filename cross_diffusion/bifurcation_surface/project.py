@@ -5,6 +5,38 @@ import sys
 from flow import FlowProject
 from itertools import product, combinations, accumulate, groupby
 
+# Decorator to return interaction model as a function
+def get_interaction_model(module, pvs):
+    '''module -> string for 3 species interaction model
+       pvs -> dictionary containing model parameters 
+       x[0] -> u, x[1] -> v, x[2] -> w
+       G_i -> prey growth, R_ij -> functional response
+    '''
+    def model(x):
+        G_u = pvs['r_u']*(1 - x[0]/pvs['K_u'])
+        G_v = pvs['r_v']*(1 - x[1]/pvs['K_v'])
+        R_uv = pvs['A_uv']/(x[0]+pvs['B_uv'])
+        R_uw = pvs['A_uw']/(x[0]+pvs['B_uw'])
+        R_vw = pvs['A_vw']/(x[1]+pvs['B_vw'])
+        if module == 'chain':
+            f = x[0] * (G_u - x[1]*R_uv)
+            g = x[1] * (x[0]*pvs['e_uv']*R_uv - x[1]*pvs['d_v'] - x[2]*R_vw)
+            h = x[2] * (x[1]*pvs['e_vw']*R_vw - x[2]*pvs['d_w'])
+        if module == 'exploitative':
+            f = x[0] * (G_u - x[1]*R_uv - x[2]*R_uw)
+            g = x[1] * (x[0]*pvs['e_uv']*R_uv - x[1]*pvs['d_v'])
+            h = x[2] * (x[0]*pvs['e_uw']*R_uw - x[2]*pvs['d_w'])
+        if module == 'apparent':
+            f = x[0] * (G_u - x[2]*R_uw)
+            g = x[1] * (G_v - x[2]*R_vw)
+            h = x[2] * (x[0]*pvs['e_uw']*R_uw + x[1]*pvs['e_vw']*R_vw - x[2]*pvs['d_w'])
+        if module == 'omnivory':
+            f = x[0] * (G_u - x[1]*R_uv - x[2]*R_uw)
+            g = x[1] * (x[0]*pvs['e_uv']*R_uv - x[2]*R_vw - x[1]*pvs['d_v'])
+            h = x[2] * (x[0]*pvs['e_uw']*R_uw + x[1]*pvs['e_vw']*R_vw - x[2]*pvs['d_w'])
+        return [f, g, h]
+    return model
+
 # Function to convert list of (n-1) spherical coordinates to n cartesian coordinates
 def spherical_to_cartesian(ang_coord_sample):
     cart_vec = []
@@ -39,6 +71,7 @@ C_offdiags = [(0,1), (0,2),
               (2,0), (2,1)]
 n_cross_arr = [i for i in range(len(C_offdiags) + 1)] #Number of nonzero cross dispersal elements
 
+@FlowProject.pre(lambda job: job.sp['local_stability'] == 'stable')
 @FlowProject.post(lambda job: job.doc.get('surface_generated'))
 @FlowProject.operation
 def generate_surface(job):
@@ -246,22 +279,22 @@ def store_omega_in_doc(job):
                 for Cij in Cij_arr:
                     i, j = Cij
                     adj = adj_mats[modules==job.sp.module][0]
-                    # j feeds on i -> C_ij > 0
+                    # j feeds on i -> Cij > 0
                     if adj[i,j] == 1.0:
                         phi_lim = (np.pi/2, np.pi)
-                    # i feeds on j -> C_ij < 0
+                    # i feeds on j -> Cij < 0
                     elif adj[j,i] == 1.0:
                         phi_lim = (0.0, np.pi/2)
-                    # Some special cases where C_ij != 0 for indirect interactions
+                    # Some special cases where Cij != 0 for indirect interactions
                     else:
-                        # Negative interaction btwn predators in exploitative -> C_ij > 0
+                        # Negative interaction btwn predators in exploitative -> Cij > 0
                         if (job.sp.module == 'exploitative') and (Cij in [(1,2), (2,1)]):
                             phi_lim = (np.pi/2, np.pi)
-                        # Negative interaction btwn prey in apparent -> C_ij > 0
+                        # Negative interaction btwn prey in apparent -> Cij > 0
                         #'''Not very confident about this assumption'''
                         elif (job.sp.module == 'apparent') and (Cij in [(0,1), (1,0)]):
                             phi_lim = (np.pi/2, np.pi)
-                        # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, C_ij = 0
+                        # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, Cij = 0
                         else:
                             phi_lim = (np.nan, np.nan)
                     phi_cross_limits.append(phi_lim)
