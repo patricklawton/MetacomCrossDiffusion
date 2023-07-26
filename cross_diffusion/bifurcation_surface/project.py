@@ -253,7 +253,7 @@ def generate_surface(job):
     job.doc['surface_generated'] = True
     #stop = timeit.default_timer(); print('Time:', stop - start)
 
-@FlowProject.pre(lambda job: job.doc.get('surface_generated'))
+@FlowProject.pre(lambda job: job.doc.get('surface_generated') or (job.sp['local_stability'] == 'unstable'))
 @FlowProject.post(lambda job: 'omega_constrained' in job.doc)
 @FlowProject.operation
 def store_omega_in_doc(job):
@@ -300,11 +300,14 @@ def store_omega_in_doc(job):
                     phi_cross_limits.append(phi_lim)
              
             # Calculate omega for constrained and unconstrained cases
-            if job.sp['method'] == 'symbolic':
-                ddi = sum([job.data[Cij_key]['omega_integrand/'+key] for key in ['wav', 'st']])
-            elif job.sp['method'] == 'numeric':
-                ddi = np.array(job.data[Cij_key]['omega_integrand/ddi'])
-            else: sys.exit('Invalid critical kappa computation method')
+            if job.sp['local_stability'] == 'unstable':
+                ddi = 0.0
+            else:
+                if job.sp['method'] == 'symbolic':
+                    ddi = sum([job.data[Cij_key]['omega_integrand/'+key] for key in ['wav', 'st']])
+                elif job.sp['method'] == 'numeric':
+                    ddi = np.array(job.data[Cij_key]['omega_integrand/ddi'])
+                else: sys.exit('Invalid critical kappa computation method')
             # Store nan for any cases with invalid/nonexistent constraints
             if np.any(np.all(np.isnan(phi_cross_limits), axis=1)):
                 omega_constrained = np.nan
