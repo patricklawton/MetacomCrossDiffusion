@@ -64,6 +64,7 @@ sd_fn = project.fn('shared_data.h5')
 with sg.H5Store(sd_fn).open(mode='r') as sd:
     adj_mats = np.array(sd['adj_mats'])
     modules = np.array([i.decode() for i in sd['modules']])
+    cross_labels = np.array([i.decode() for i in sd['cross_labels']])
 
 # Define possible off diagonal C elements
 C_offdiags = [(0,1), (0,2),
@@ -254,6 +255,7 @@ def generate_surface(job):
     #stop = timeit.default_timer(); print('Time:', stop - start)
 
 @FlowProject.pre(lambda job: job.doc.get('surface_generated') or (job.sp['local_stability'] == 'unstable'))
+#@FlowProject.pre(lambda job: job.doc.get('surface_generated'))
 @FlowProject.post(lambda job: 'omega_constrained' in job.doc)
 @FlowProject.operation
 def store_omega_in_doc(job):
@@ -261,24 +263,25 @@ def store_omega_in_doc(job):
         # Add dictionaries to job document to store data in
         job.doc['omega_constrained'] = {}
         job.doc['omega_unconstrained'] = {}
+        
+        # Select adjacency matrix
+        adj = adj_mats[modules==job.sp.module][0]
 
         # Loop over cross diffusion scenarios, stored as keys in job data
         drop = {'J'}
-        Cij_keys = [key for key in list(job.data.keys()) if key not in drop]
-        for Cij_key in Cij_keys:
+        for Cij_key in cross_labels:
             # Set constraints on the elements of C
             # Diagonal elements (phi_(n-2), phi_(n-1)) always > 0
             phi_diag_limits = [(np.pi/2, np.pi), (np.pi, 3*np.pi/2)]
-            # Constrain off-diagonals to opposite sign of species interaction
             if Cij_key == 'diag':
-                phi_cross_limits = [[]]
+                phi_cross_limits = []
+            # Constrain off-diagonals to opposite sign of species interaction
             else:
                 # Convert key to a list of off-diagonal C element indices
                 Cij_arr = [(int(e[0]), int(e[1])) for e in Cij_key.split(',')]
                 phi_cross_limits = []
                 for Cij in Cij_arr:
                     i, j = Cij
-                    adj = adj_mats[modules==job.sp.module][0]
                     # j feeds on i -> Cij > 0
                     if adj[i,j] == 1.0:
                         phi_lim = (np.pi/2, np.pi)
@@ -298,34 +301,43 @@ def store_omega_in_doc(job):
                         else:
                             phi_lim = (np.nan, np.nan)
                     phi_cross_limits.append(phi_lim)
-             
-            # Calculate omega for constrained and unconstrained cases
-            if job.sp['local_stability'] == 'unstable':
-                ddi = 0.0
-            else:
+
+            # Get the stored data across dispersal parameterizations
+            if job.sp['local_stability'] != 'unstable':
                 if job.sp['method'] == 'symbolic':
                     ddi = sum([job.data[Cij_key]['omega_integrand/'+key] for key in ['wav', 'st']])
                 elif job.sp['method'] == 'numeric':
                     ddi = np.array(job.data[Cij_key]['omega_integrand/ddi'])
                 else: sys.exit('Invalid critical kappa computation method')
-            # Store nan for any cases with invalid/nonexistent constraints
-            if np.any(np.all(np.isnan(phi_cross_limits), axis=1)):
+
+            # First get the constrained value of omega
+            # Store nan for any cases with invalid constraints
+            if (len(phi_cross_limits) != 0) and np.any(np.all(np.isnan(phi_cross_limits), axis=1)):
                 omega_constrained = np.nan
-            # Otherwise calculate the constrained value
+            # Otherwise calculate omega_ddi with the constraints above
             else:
-                all_constraints = [] 
-                phi_limits = phi_cross_limits + phi_diag_limits
-                for i, limit in enumerate(phi_limits):
-                    phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
-                    all_constraints.append(phi_i > limit[0])
-                    all_constraints.append(phi_i < limit[1])
-                constraint = np.all(all_constraints, axis=0)
-                if sum(constraint) != 0:
-                    omega_constrained = np.mean(ddi[constraint])
-                # If there's no data within the constraints, store nan, but this shouldn't happen
+                if job.sp['local_stability'] == 'unstable':
+                    omega_constrained = 0.0
                 else:
-                    omega_constrained = np.nan
-            omega_unconstrained = np.mean(ddi)
+                    # Combine all of the constraints
+                    all_constraints = [] 
+                    phi_limits = phi_cross_limits + phi_diag_limits
+                    for i, limit in enumerate(phi_limits):
+                        phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
+                        all_constraints.append(phi_i > limit[0])
+                        all_constraints.append(phi_i < limit[1])
+                    constraint = np.all(all_constraints, axis=0)
+                    # Get the mean value of the data within the constraints
+                    if sum(constraint) != 0:
+                        omega_constrained = np.mean(ddi[constraint])
+                    # If there's no data within the contraints, something is wrong 
+                    else:
+                        sys.exit('No data found within the specified constraints')
+            # Finally get the unconstrained value
+            if job.sp['local_stability'] == 'unstable':
+                omega_unconstrained = 0.0
+            else:
+                omega_unconstrained = np.mean(ddi)
             
             # Store in job document
             job.doc['omega_constrained'][Cij_key] = omega_constrained 

@@ -1,15 +1,31 @@
 import numpy as np
 from scipy import optimize
 import signac as sg
-from itertools import product
+from itertools import product, combinations
 from project import get_interaction_model
 
 # Initialize signac project 
 project = sg.init_project()
 
-# Write adjacency matrices and module labels to project level data
-modules = np.array(['chain', 'exploitative', 'apparent', 'omnivory'])
+# Write some project level data
 sd_fn = project.fn('shared_data.h5')
+modules = np.array(['chain', 'exploitative', 'apparent', 'omnivory'])
+C_offdiags = np.array([[[0,1]], [[0,2]],
+                       [[1,0]], [[1,2]],
+                       [[2,0]], [[2,1]]])
+cross_labels = []
+for n_cross in np.arange(0, len(C_offdiags)+1):
+    if n_cross == 0:
+        cross_combs = [[]]
+    else:
+        cross_combs = [[Cij[0] for Cij in comb] for comb in combinations(C_offdiags, int(n_cross))]
+    for cross_comb in cross_combs:
+        # Make label for nonzero offdiagonals to store in job data
+        if len(cross_comb) == 0:
+            cross_label = 'diag'
+        else:
+            cross_label = ','.join([str(c[0])+str(c[1]) for c in cross_comb])
+        cross_labels.append(cross_label)
 with sg.H5Store(sd_fn).open(mode='w') as sd:
     sd['adj_mats'] =  np.array([ 
         [[0.,1,0],[0,0,1],[0,0,0]],
@@ -18,6 +34,9 @@ with sg.H5Store(sd_fn).open(mode='w') as sd:
         [[0,1,1],[0,0,1],[0,0,0]]
         ])
     sd['modules'] = [str(module) for module in modules]
+    sd['cross_labels'] = cross_labels
+    sd['C_offdiags'] = C_offdiags
+import sys; sys.exit()
 
 # Variable parameters (constant if only one value specified) 
 N_ns = [1e2] #Avg density of samples per 0-pi/2 interval
@@ -29,14 +48,11 @@ x0_trials = int(1e3) #Number of attempts for steady state solving
 x0_scale = 10 #Sets range of (random) initial values drawn for steady state solving 
 param_scale = 10 #Sets range of (random) values for model parameters
 nonzero_thresh = 1e-5 #Threshold for accepting a steady state variable as nonzero
-#print(nonzero_thresh)
 param_labels = ['r_u', 'r_v', 'K_u', 'K_v', 'A_uv', 'A_uw', 'A_vw',
                 'B_uv', 'B_uw', 'B_vw', 'd_v', 'd_w', 'e_uv', 'e_uw', 'e_vw']
 
 # Find desired number of random model parameterizations per module
 for module_i, module in enumerate(modules):
-    #print(module)
-    #print('----------------------------')
     while len(project.find_jobs({'module': module})) < num_parameterizations:
         model_params = {}
         for param in param_labels:
@@ -47,7 +63,6 @@ for module_i, module in enumerate(modules):
         for i in range(x0_trials):
             x0 = np.random.random(3) * x0_scale
             sol = optimize.root(interaction_model, x0)
-            #print(sol)
             # Make sure steady state is nontrivial (i.e. all state variables nonzero)
             if sol.success and np.all(sol.x > nonzero_thresh):
                 steady_state_found = True
