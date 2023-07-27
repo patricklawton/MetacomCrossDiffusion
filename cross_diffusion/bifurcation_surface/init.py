@@ -36,7 +36,6 @@ with sg.H5Store(sd_fn).open(mode='w') as sd:
     sd['modules'] = [str(module) for module in modules]
     sd['cross_labels'] = cross_labels
     sd['C_offdiags'] = C_offdiags
-import sys; sys.exit()
 
 # Variable parameters (constant if only one value specified) 
 N_ns = [1e2] #Avg density of samples per 0-pi/2 interval
