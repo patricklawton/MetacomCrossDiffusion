@@ -51,7 +51,8 @@ param_labels = ['r_u', 'r_v', 'K_u', 'K_v', 'A_uv', 'A_uw', 'A_vw',
                 'B_uv', 'B_uw', 'B_vw', 'd_v', 'd_w', 'e_uv', 'e_uw', 'e_vw']
 
 # Find desired number of random model parameterizations per module
-for module_i, module in enumerate(modules):
+#for module_i, module in enumerate(modules):
+for module in modules[0:1]:
     while len(project.find_jobs({'module': module})) < num_parameterizations:
         model_params = {}
         for param in param_labels:

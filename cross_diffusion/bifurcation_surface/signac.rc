@@ -1,5 +1,5 @@
 project = None
 schema_version = 1
-workspace_dir = workspace
+workspace_dir = workspace_inc_kap_resolution
 [General]
 [hosts]

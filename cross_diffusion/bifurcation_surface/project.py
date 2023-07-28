@@ -129,7 +129,9 @@ def generate_surface(job):
                 # Initialize data
                 data = {'kappa_cs': [], 'omega_integrand': {'ddi': [], 'stab': []}}
                 # Define array of kappa values to compute eigenvalues at
-                kappas = np.arange(1e3)
+                #kappas = np.arange(1e3)
+                kmax, step = (40, 0.05)
+                kappas = np.arange(0, kmax+step, step)
             else:
                 sys.exit('Invalid critical kappa computation method')
 
