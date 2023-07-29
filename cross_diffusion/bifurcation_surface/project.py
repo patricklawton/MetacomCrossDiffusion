@@ -130,7 +130,7 @@ def generate_surface(job):
                 data = {'kappa_cs': [], 'omega_integrand': {'ddi': [], 'stab': []}}
                 # Define array of kappa values to compute eigenvalues at
                 #kappas = np.arange(1e3)
-                kmax, step = (40, 0.05)
+                kmax, step = (100, 0.1)
                 kappas = np.arange(0, kmax+step, step)
             else:
                 sys.exit('Invalid critical kappa computation method')
@@ -307,7 +307,7 @@ def store_omega_in_doc(job):
             # Get the stored data across dispersal parameterizations
             if job.sp['local_stability'] != 'unstable':
                 if job.sp['method'] == 'symbolic':
-                    ddi = sum([job.data[Cij_key]['omega_integrand/'+key] for key in ['wav', 'st']])
+                    ddi = sum([np.array(job.data[Cij_key]['omega_integrand/'+key]) for key in ['wav', 'st']])
                 elif job.sp['method'] == 'numeric':
                     ddi = np.array(job.data[Cij_key]['omega_integrand/ddi'])
                 else: sys.exit('Invalid critical kappa computation method')

@@ -42,18 +42,18 @@ N_ns = [1e2] #Avg density of samples per 0-pi/2 interval
 methods = ['numeric']
 
 # Constants
-num_parameterizations = 1e2 #Per module 
+num_parameterizations = 20 #Per module 
 x0_trials = int(1e3) #Number of attempts for steady state solving 
 x0_scale = 10 #Sets range of (random) initial values drawn for steady state solving 
 param_scale = 10 #Sets range of (random) values for model parameters
-nonzero_thresh = 1e-5 #Threshold for accepting a steady state variable as nonzero
+nonzero_thresh = 1e-15 #Threshold for accepting a steady state variable as nonzero
 param_labels = ['r_u', 'r_v', 'K_u', 'K_v', 'A_uv', 'A_uw', 'A_vw',
                 'B_uv', 'B_uw', 'B_vw', 'd_v', 'd_w', 'e_uv', 'e_uw', 'e_vw']
 
 # Find desired number of random model parameterizations per module
-#for module_i, module in enumerate(modules):
-for module in modules[0:1]:
-    while len(project.find_jobs({'module': module})) < num_parameterizations:
+for N_n, method, module in product(N_ns, methods, modules):
+    jobs_filter = {'N_n': N_n, 'method': method, 'module': module}
+    while len(project.find_jobs(jobs_filter)) < num_parameterizations:
         model_params = {}
         for param in param_labels:
             model_params[param] = param_scale * np.random.sample()
@@ -81,13 +81,12 @@ for module in modules[0:1]:
             local_stability = 'infeasible'
 
         # Initialize job
-        for N_n, method in product(N_ns, methods):
-            sp = {'module': module, 'N_n': N_n, 'model_params': model_params, 
-                  'method': method, 'local_stability': local_stability}
-            if local_stability != 'infeasible':
-                sp['steady_state'] = {'u': float(sol.x[0]), 
-                                      'v': float(sol.x[1]), 
-                                      'w': float(sol.x[2])}
-            job = project.open_job(sp)
-            job.init()
-            job.data['J'] = J
+        sp = {'module': module, 'N_n': N_n, 'model_params': model_params, 
+              'method': method, 'local_stability': local_stability}
+        if local_stability != 'infeasible':
+            sp['steady_state'] = {'u': float(sol.x[0]), 
+                                  'v': float(sol.x[1]), 
+                                  'w': float(sol.x[2])}
+        job = project.open_job(sp)
+        job.init()
+        job.data['J'] = J
