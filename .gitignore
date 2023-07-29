@@ -17,3 +17,4 @@ testing.ipynb
 nonzero*.csv
 testing.ipynb
 *.pyc
+*.sh
