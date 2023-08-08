@@ -4,6 +4,7 @@ import signac as sg
 import sys
 from flow import FlowProject
 from itertools import product, combinations, accumulate, groupby
+import timeit 
 
 # Decorator to return interaction model as a function
 def get_interaction_model(module, pvs):
@@ -59,12 +60,12 @@ def spherical_to_cartesian(ang_coord_sample):
 # Open up signac project
 project = sg.get_project()
 
-# Read in adjacency matrices and module labels from project data
+# Read in some things from project data
 sd_fn = project.fn('shared_data.h5')
 with sg.H5Store(sd_fn).open(mode='r') as sd:
-    adj_mats = np.array(sd['adj_mats'])
-    modules = np.array([i.decode() for i in sd['modules']])
-    cross_labels = np.array([i.decode() for i in sd['cross_labels']])
+    adj_mats = np.array(sd['adj_mats']) #Adjacency matricies
+    modules = np.array([i.decode() for i in sd['modules']]) #Interaction module labels
+    cross_labels = np.array([i.decode() for i in sd['cross_labels']]) #Cross-diffusion scenario labels
 
 # Define possible off diagonal C elements
 C_offdiags = [(0,1), (0,2),
@@ -76,7 +77,7 @@ n_cross_arr = [i for i in range(len(C_offdiags) + 1)] #Number of nonzero cross d
 @FlowProject.post(lambda job: job.doc.get('surface_generated'))
 @FlowProject.operation
 def generate_surface(job):
-    import timeit; start = timeit.default_timer()
+    start = timeit.default_timer()
     sp = job.sp
     
     # Read in non-spatial jacobian from job data
