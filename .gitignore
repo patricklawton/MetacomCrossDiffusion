@@ -18,3 +18,6 @@ nonzero*.csv
 testing.ipynb
 *.pyc
 *.sh
+init_old.py
+project_nonvectorized.py
+*copy*
