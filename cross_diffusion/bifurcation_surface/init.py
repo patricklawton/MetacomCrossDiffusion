@@ -42,9 +42,9 @@ for n_cross in np.arange(0, len(C_offdiags)+1):
         else:
             cross_label = ','.join([str(c[0])+str(c[1]) for c in cross_comb])
         cross_labels.append(cross_label)
+resample = False
 
 # Sample dispersal parameters and write to shared data
-resample = False
 sd_fn = project.fn('shared_data.h5')
 if (os.path.isfile(sd_fn) == False) or resample:
     rng = np.random.default_rng()

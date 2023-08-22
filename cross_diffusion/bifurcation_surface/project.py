@@ -82,7 +82,6 @@ def generate_surface(job):
             # Generate surface numerically
             if sp['method'] == 'numeric':
                 get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_samples, sd_fn)
-                pass
             # Generate surface symbolically 
             elif sp['method'] == 'symbolic':
                 # Initialize data for this cross-diffusive scenario
@@ -238,25 +237,25 @@ def store_omega_in_doc(job):
                     omega_constrained = 0.0
                 else:
                     # Combine all of the constraints
-                    all_constraints = [] 
-                    limits = cross_limits + diag_limits
-                    for i, limit in enumerate(limits):
-                        coord_idx = np.nonzero([list(ij) == C_nonzero[i] for ij in C_elements])[0]
-                        with sg.H5Store(sd_fn).open(mode='r') as sd:
+                    with sg.H5Store(sd_fn).open(mode='r') as sd:
+                        all_constraints = [] 
+                        limits = cross_limits + diag_limits
+                        for i, limit in enumerate(limits):
+                            coord_idx = np.nonzero([list(ij) == C_nonzero[i] for ij in C_elements])[0]
                             coord_i = np.array(sd['cart_coord_samples'][coord_idx, :num_samples])
-                        #phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
-                        all_constraints.append(coord_i > limit[0])
-                        all_constraints.append(coord_i < limit[1])
-                    #print(all_constraints)
-                    constraint = np.all(all_constraints, axis=0)[0]
-                    #print(constraint)
-                    # Get the mean value of the data within the constraints
-                    if sum(constraint) != 0:
-                        omega_constrained = np.mean(ddi[constraint])
-                        #sys.exit()
-                    # If there's no data within the contraints, something is wrong 
-                    else:
-                        sys.exit('No data found within the specified constraints')
+                            #phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
+                            all_constraints.append(coord_i > limit[0])
+                            all_constraints.append(coord_i < limit[1])
+                        #print(all_constraints)
+                        constraint = np.all(all_constraints, axis=0)[0]
+                        #print(constraint)
+                        # Get the mean value of the data within the constraints
+                        if sum(constraint) != 0:
+                            omega_constrained = np.mean(ddi[constraint])
+                            #sys.exit()
+                        # If there's no data within the contraints, something is wrong 
+                        else:
+                            sys.exit('No data found within the specified constraints')
             # Finally get the unconstrained value
             if job.sp['local_stability'] == 'unstable':
                 omega_unconstrained = 0.0

@@ -50,3 +50,26 @@ def spherical_to_cartesian(ang_coord_sample):
             cart_coord = 0.0
         cart_vec.append(cart_coord)
     return cart_vec
+
+def get_cross_limits(ij, module, adj):
+    '''ij -> tuple of C element indices
+    '''
+    i, j = ij
+    # j feeds on i -> Cij > 0
+    if adj[i,j] == 1.0:
+        lim = (0, 1)
+    # i feeds on j -> Cij < 0
+    elif adj[j,i] == 1.0:
+        lim = (-1, 0)
+    # Some special cases where Cij != 0 for indirect interactions
+    else:
+        # Negative interaction btwn predators in exploitative -> Cij > 0
+        if (module == 'exploitative') and (ij in [(1,2), (2,1)]):
+            lim = (0, 1)
+        # Negative interaction btwn prey in apparent -> Cij > 0
+        elif (module == 'apparent') and (ij in [(0,1), (1,0)]):
+            lim = (0, 1)
+        # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, Cij = 0
+        else:
+            lim = (np.nan, np.nan)
+    return lim
