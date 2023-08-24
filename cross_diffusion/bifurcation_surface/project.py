@@ -5,7 +5,7 @@ from flow import FlowProject
 from itertools import product, combinations, accumulate, groupby
 import sys
 import timeit 
-from global_functions import spherical_to_cartesian
+from global_functions import spherical_to_cartesian, get_cross_limits
 
 # Open up signac project
 project = sg.get_project()
@@ -174,6 +174,8 @@ def store_omega_in_doc(job):
         # Add dictionaries to job document to store data in
         job.doc['omega_constrained'] = {}
         job.doc['omega_unconstrained'] = {}
+        job.doc['stdev_constrained'] = {}
+        job.doc['stdev_unconstrained'] = {}
         
         # Select adjacency matrix
         adj = adj_mats[modules==job.sp.module][0]
@@ -196,28 +198,7 @@ def store_omega_in_doc(job):
                 C_nonzero = [list(Cij) for Cij in Cij_arr] + [[i,i] for i in range(3)]
                 '''Fix: read in sample density from shared data'''
                 num_samples = int((2**len(Cij_arr) + 3)*1e2) 
-                cross_limits = []
-                for Cij in Cij_arr:
-                    i, j = Cij
-                    # j feeds on i -> Cij > 0
-                    if adj[i,j] == 1.0:
-                        lim = (0, 1)
-                    # i feeds on j -> Cij < 0
-                    elif adj[j,i] == 1.0:
-                        lim = (-1, 0)
-                    # Some special cases where Cij != 0 for indirect interactions
-                    else:
-                        # Negative interaction btwn predators in exploitative -> Cij > 0
-                        if (job.sp.module == 'exploitative') and (Cij in [(1,2), (2,1)]):
-                            lim = (0, 1)
-                        # Negative interaction btwn prey in apparent -> Cij > 0
-                        #'''Not very confident about this assumption'''
-                        elif (job.sp.module == 'apparent') and (Cij in [(0,1), (1,0)]):
-                            lim = (0, 1)
-                        # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, Cij = 0
-                        else:
-                            lim = (np.nan, np.nan)
-                    cross_limits.append(lim)
+                cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
 
             # Get the stored data across dispersal parameterizations
             if job.sp['local_stability'] != 'unstable':
@@ -231,10 +212,12 @@ def store_omega_in_doc(job):
             # Store nan for any cases with invalid constraints
             if (len(cross_limits) != 0) and np.any(np.all(np.isnan(cross_limits), axis=1)):
                 omega_constrained = np.nan
+                stdev_constrained = np.nan
             # Otherwise calculate omega_ddi with the constraints above
             else:
                 if job.sp['local_stability'] == 'unstable':
                     omega_constrained = 0.0
+                    stdev_constrained = 0.0
                 else:
                     # Combine all of the constraints
                     with sg.H5Store(sd_fn).open(mode='r') as sd:
@@ -252,6 +235,9 @@ def store_omega_in_doc(job):
                         # Get the mean value of the data within the constraints
                         if sum(constraint) != 0:
                             omega_constrained = np.mean(ddi[constraint])
+                            squared_avg = sum(ddi[constraint]) / len(ddi[constraint])
+                            avg_squared = sum(ddi[constraint]) / len(ddi[constraint])**2  
+                            stdev_constrained = (1/np.sqrt(len(ddi[constraint]))) * np.sqrt(squared_avg - avg_squared) 
                             #sys.exit()
                         # If there's no data within the contraints, something is wrong 
                         else:
@@ -259,12 +245,18 @@ def store_omega_in_doc(job):
             # Finally get the unconstrained value
             if job.sp['local_stability'] == 'unstable':
                 omega_unconstrained = 0.0
+                stdev_unconstrained = 0.0
             else:
                 omega_unconstrained = np.mean(ddi)
+                squared_avg = sum(ddi) / len(ddi)
+                avg_squared = sum(ddi) / len(ddi)**2  
+                stdev_unconstrained = (1/np.sqrt(len(ddi))) * np.sqrt(squared_avg - avg_squared) 
             
             # Store in job document
             job.doc['omega_constrained'][Cij_key] = omega_constrained 
+            job.doc['stdev_constrained'][Cij_key] = stdev_constrained
             job.doc['omega_unconstrained'][Cij_key] = omega_unconstrained 
+            job.doc['stdev_unconstrained'][Cij_key] = stdev_unconstrained
 
 if __name__ == "__main__":
     FlowProject().main()

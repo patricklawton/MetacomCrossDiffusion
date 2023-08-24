@@ -19,7 +19,7 @@ C_elements = np.array(C_offdiags + [[i,i] for i in range(3)])
 
 # Initialize data
 out_fn = 'local_robustness.h5'
-constraint_keys = ['unconstrained', 'constrained']
+constraint_keys = ['constrained', 'unconstrained']
 robustness_data = {}
 for module in modules:
     robustness_data[module] = {key: {} for key in constraint_keys}
@@ -52,6 +52,7 @@ for module_idx, constraint_key in tqdm(product(range(len(modules)), constraint_k
         # Get the average for each cross diffusive scenario
         omega_n_cross = {'value': [], 'stdev': []}
         for cross_label in labels:
+            #print(cross_label)
             if (constraint_key == 'constrained') and (n_cross != 0):
                 # Get the cross diffusive limits for the constrained case
                 Cij_arr = [(int(e[0]), int(e[1])) for e in cross_label.split(',')]
@@ -88,9 +89,14 @@ for module_idx, constraint_key in tqdm(product(range(len(modules)), constraint_k
                 avg_squared = sum(omega_spatial_sample) / len(omega_spatial_sample)**2  
                 stdev = (1/np.sqrt(len(omega_spatial_sample))) * np.sqrt(squared_avg - avg_squared) 
                 omega_cross_scenario['stdev'].append(stdev)
+            #print(omega_cross_scenario)
+            if len(omega_cross_scenario['value']) == 0:
+                continue    
             omega_n_cross['value'].append(np.mean(omega_cross_scenario['value']))
             stdev = (1/len(omega_cross_scenario['value'])) * np.sqrt(sum(np.square(omega_cross_scenario['stdev'])))
             omega_n_cross['stdev'].append(stdev)
+        if len(omega_n_cross['value']) == 0:
+            continue
         omega_module['value'].append(np.mean(omega_n_cross['value']))
         stdev = (1/len(omega_n_cross['value'])) * np.sqrt(sum(np.square(omega_n_cross['stdev'])))
         omega_module['stdev'].append(stdev)
@@ -102,5 +108,5 @@ if not os.path.isfile(out_fn):
         for module in modules:
             robustness_file[module+'/fraction_unstable'] = robustness_data[module]['fraction_unstable']
             for key in constraint_keys:
-                robustness_file[module+'/'+key] = np.array(robustness_data[module][key]['mean'])
-                robustness_file[module+'/'+key] = np.array(robustness_data[module][key]['stdev'])
+                robustness_file[module+'/'+key+'/mean'] = np.array(robustness_data[module][key]['mean'])
+                robustness_file[module+'/'+key+'/stdev'] = np.array(robustness_data[module][key]['stdev'])
