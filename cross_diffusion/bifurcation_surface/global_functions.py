@@ -73,3 +73,12 @@ def get_cross_limits(ij, module, adj):
         else:
             lim = (np.nan, np.nan)
     return lim
+
+def get_num_spatials(n_cross, sample_density=1e2):
+    '''Get the number of spatial parameterizations given a value of 
+       n_cross and desired density per sign permutation'''
+    if n_cross == 0:
+        num_spatials = int(3 * sample_density)
+    else:
+        num_spatials = int((2**n_cross + 3)*sample_density)
+    return num_spatials

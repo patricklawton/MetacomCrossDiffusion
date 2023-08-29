@@ -196,9 +196,9 @@ def store_omega_in_doc(job):
                 # Convert key to a list of off-diagonal C element indices
                 Cij_arr = [(int(e[0]), int(e[1])) for e in Cij_key.split(',')]
                 C_nonzero = [list(Cij) for Cij in Cij_arr] + [[i,i] for i in range(3)]
+                cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
                 '''Fix: read in sample density from shared data'''
                 num_samples = int((2**len(Cij_arr) + 3)*1e2) 
-                cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
 
             # Get the stored data across dispersal parameterizations
             if job.sp['local_stability'] != 'unstable':
@@ -226,7 +226,6 @@ def store_omega_in_doc(job):
                         for i, limit in enumerate(limits):
                             coord_idx = np.nonzero([list(ij) == C_nonzero[i] for ij in C_elements])[0]
                             coord_i = np.array(sd['cart_coord_samples'][coord_idx, :num_samples])
-                            #phi_i = np.array(job.data[Cij_key]['phi_'+str(i+1)])
                             all_constraints.append(coord_i > limit[0])
                             all_constraints.append(coord_i < limit[1])
                         #print(all_constraints)
@@ -236,7 +235,7 @@ def store_omega_in_doc(job):
                         if sum(constraint) != 0:
                             omega_constrained = np.mean(ddi[constraint])
                             squared_avg = sum(ddi[constraint]) / len(ddi[constraint])
-                            avg_squared = sum(ddi[constraint]) / len(ddi[constraint])**2  
+                            avg_squared = sum(ddi[constraint])**2 / len(ddi[constraint])**2  
                             stdev_constrained = (1/np.sqrt(len(ddi[constraint]))) * np.sqrt(squared_avg - avg_squared) 
                             #sys.exit()
                         # If there's no data within the contraints, something is wrong 
