@@ -13,8 +13,13 @@ random_matrix*.pkl
 nonzero*.csv
 __pycache__
 runandstore.sh
-testing.ipynb
+testing*
 nonzero*.csv
 testing.ipynb
 *.pyc
 *.sh
+init_old.py
+project_nonvectorized.py
+*copy*
+local_robustness.h5
+robustness.h5
