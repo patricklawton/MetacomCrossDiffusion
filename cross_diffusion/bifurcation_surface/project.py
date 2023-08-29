@@ -5,7 +5,7 @@ from flow import FlowProject
 from itertools import product, combinations, accumulate, groupby
 import sys
 import timeit 
-from global_functions import spherical_to_cartesian, get_cross_limits
+from global_functions import * 
 
 # Open up signac project
 project = sg.get_project()
@@ -17,10 +17,20 @@ with sg.H5Store(sd_fn).open(mode='r') as sd:
     modules = np.array([i.decode() for i in sd['modules']]) #Interaction module labels
     cross_labels = np.array([i.decode() for i in sd['cross_labels']]) #Cross-diffusion scenario labels
     C_offdiags = list(sd['C_offdiags'])
+    N_n = float(sd['N_n'])
 n_cross_arr = [i for i in range(len(C_offdiags) + 1)] #Number of nonzero cross dispersal elements
 C_elements = np.array(C_offdiags + [[i,i] for i in range(3)])
 
-def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_samples, sd_fn):
+def chunk_ev_calc(C_vec, J, kappa_vec, chunksize):
+    for start in range(0, C_vec.shape[0], chunksize):
+        if start + chunksize > C_vec.shape[0]:
+            length = C_vec.shape[0] - start
+        else:
+            length = chunksize
+        M_slice = np.broadcast_to(J, (length,kappa_vec.shape[1],3,3)) - kappa_vec * C_vec[start:start + chunksize]
+        yield M_slice
+
+def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spatials, sd_fn):
     # Define array of kappa values to compute eigenvalues at
     kmax, step = (100, 0.1)
     kappas = np.arange(0, kmax+step, step)
@@ -30,28 +40,30 @@ def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_sampl
     # Construct connectivity matricies from random samples
     C_nonzero = [list(Cij) for Cij in cross_comb] + [[i,i] for i in range(3)]
     indices = np.nonzero([list(ij) in C_nonzero for ij in C_elements])[0]
-    C_vec = np.zeros((num_samples,1,3,3))
+    C_vec = np.zeros((num_spatials,1,3,3))
     with sg.H5Store(sd_fn).open(mode='r') as sd:
-        cart_coord_samples = np.array(sd['cart_coord_samples'][indices, :num_samples])
+        cart_coord_samples = np.array(sd['cart_coord_samples'][indices, :num_spatials])
     for idx, (i, j) in enumerate(C_nonzero):
         C_vec[:, 0, i, j] = cart_coord_samples[idx, :]
     # Construct array of community jacobians across dispersal parameterizations and kappa values
-    M_vec = np.broadcast_to(J, (C_vec.shape[0],kappa_vec.shape[1],3,3)) - kappa_vec * C_vec
-    # Find if and where critical kappas occur
-    kappa_cs = []
-    any_positive = np.any(np.linalg.eigvals(M_vec).real > 0, axis=2)
-    for vec in any_positive:
-        critical_indices = list(accumulate(sum(1 for _ in g) for _,g in groupby(vec)))[:-1]
-        critical_kappas = kappas[critical_indices]
-        critical_kappas = np.pad(critical_kappas.astype(float),
-                                (0, max_kap_crits-len(critical_indices)), 
-                                mode='constant', constant_values=(np.nan,))
-        kappa_cs.append(critical_kappas)
-    # Store data
-    #job.data[cross_label + '/ddi'] = np.any(any_positive, axis=1)
-    #job.data[cross_label + '/kappa_cs'] = np.array(kappa_cs)
-    job.data['ddi/' + cross_label] = np.any(any_positive, axis=1)
-    job.data['kappa_cs/' + cross_label] = np.array(kappa_cs)
+    #M_vec = np.broadcast_to(J, (C_vec.shape[0],kappa_vec.shape[1],3,3)) - kappa_vec * C_vec
+    ## Find if and where critical kappas occur
+    #kappa_cs = []
+    #any_positive = np.any(np.linalg.eigvals(M_vec).real > 0, axis=2)
+    #for vec in any_positive:
+    #    critical_indices = list(accumulate(sum(1 for _ in g) for _,g in groupby(vec)))[:-1]
+    #    critical_kappas = kappas[critical_indices]
+    #    critical_kappas = np.pad(critical_kappas.astype(float),
+    #                            (0, max_kap_crits-len(critical_indices)), 
+    #                            mode='constant', constant_values=(np.nan,))
+    #    kappa_cs.append(critical_kappas)
+    ## Store data
+    #job.data['ddi/' + cross_label] = np.any(any_positive, axis=1)
+    #job.data['kappa_cs/' + cross_label] = np.array(kappa_cs)
+    ddi_vec = []
+    for M_slice in chunk_ev_calc(C_vec, J, kappa_vec, int(1e4)):
+        ddi_vec.append(np.any(np.linalg.eigvals(M_slice).real > 0, axis=(2,1)))
+    job.data['ddi/' + cross_label] = np.concatenate(ddi_vec)
 
 @FlowProject.pre(lambda job: job.sp['local_stability'] == 'stable')
 @FlowProject.post(lambda job: job.doc.get('surface_generated'))
@@ -67,7 +79,8 @@ def generate_surface(job):
     # Loop over all possible combinations of cross-dispersal elements 
     for n_cross in n_cross_arr:
         '''Fix: read in sample density from shared data'''
-        num_samples = int((2**n_cross + 3)*1e2) if n_cross != 0 else int(3*1e2)
+        #num_samples = int((2**n_cross + 3)*1e2) if n_cross != 0 else int(3*1e2)
+        num_spatials = get_num_spatials(n_cross, sample_density=N_n)
         if n_cross == 0:
             cross_combs = [[]]
         else:
@@ -81,7 +94,7 @@ def generate_surface(job):
             
             # Generate surface numerically
             if sp['method'] == 'numeric':
-                get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_samples, sd_fn)
+                get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spatials, sd_fn)
             # Generate surface symbolically 
             elif sp['method'] == 'symbolic':
                 # Initialize data for this cross-diffusive scenario
@@ -110,7 +123,7 @@ def generate_surface(job):
                 # Get dispersal samples 
                 indices = np.nonzero([list(ij) in C_nonzero for ij in C_elements])[0]
                 with sg.H5Store(sd_fn).open(mode='r') as sd:
-                    cart_coord_samples = np.array(sd['cart_coord_samples'][indices, :num_samples])
+                    cart_coord_samples = np.array(sd['cart_coord_samples'][indices, :num_spatials])
                 # Solve for critical kappas (symbolically) at each coordinate
                 for cart_coord_sample in cart_coord_samples:
                     kappa_wavs, kappa_sts = ([], [])
@@ -191,8 +204,8 @@ def store_omega_in_doc(job):
             diag_limits = [(0,1), (0,1), (0,1)]
             if Cij_key == 'diag':
                 C_nonzero = [[i,i] for i in range(3)]
-                '''Fix: read in sample density from shared data'''
-                num_samples = int(3*1e2)
+                #num_spatials = int(3*1e2)
+                num_spatials = get_num_spatials(0, sample_density=N_n)
                 cross_limits = []
             # Constrain off-diagonals to opposite sign of species interaction
             else:
@@ -201,8 +214,8 @@ def store_omega_in_doc(job):
                 C_nonzero = [list(Cij) for Cij in Cij_arr] + [[i,i] for i in range(3)]
                 cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
                 #cross_limits = [get_cross_limits(ij, J) for ij in Cij_arr]
-                '''Fix: read in sample density from shared data'''
-                num_samples = int((2**len(Cij_arr) + 3)*1e2) 
+                #num_spatials = int((2**len(Cij_arr) + 3)*1e2) 
+                num_spatials = get_num_spatials(len(Cij_arr), sample_density=N_n)  
 
             # Get the stored data across dispersal parameterizations
             if job.sp['local_stability'] != 'unstable':
@@ -229,7 +242,7 @@ def store_omega_in_doc(job):
                         limits = cross_limits + diag_limits
                         for i, limit in enumerate(limits):
                             coord_idx = np.nonzero([list(ij) == C_nonzero[i] for ij in C_elements])[0]
-                            coord_i = np.array(sd['cart_coord_samples'][coord_idx, :num_samples])
+                            coord_i = np.array(sd['cart_coord_samples'][coord_idx, :num_spatials])
                             all_constraints.append(coord_i > limit[0])
                             all_constraints.append(coord_i < limit[1])
                         #print(all_constraints)

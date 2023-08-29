@@ -9,14 +9,14 @@ from global_functions import get_interaction_model, spherical_to_cartesian
 project = sg.init_project()
 
 # Constants
-num_parameterizations = 100 #Per module 
+num_parameterizations = 1000 #Per module 
 x0_trials = int(1e3) #Number of attempts for steady state solving 
 x0_scale = 10 #Sets range of (random) initial values drawn for steady state solving 
 param_scale = 10 #Sets range of (random) values for model parameters
 nonzero_thresh = 1e-15 #Threshold for accepting a steady state variable as nonzero
 param_labels = ['r_u', 'r_v', 'K_u', 'K_v', 'A_uv', 'A_uw', 'A_vw',
                 'B_uv', 'B_uw', 'B_vw', 'd_v', 'd_w', 'e_uv', 'e_uw', 'e_vw']
-N_n = 1e2 #Avg density of samples per 0-pi/2 interval
+N_n = 1e3 #Avg density of samples per 0-pi/2 interval
 total_samples = int((2**(9-3) + 3) * N_n)
 modules = np.array(['chain', 'exploitative', 'apparent', 'omnivory'])
 '''The order of this list defines the map from n cartesian coordinates to (n-1) spherical coordinates.
@@ -67,6 +67,7 @@ if (os.path.isfile(sd_fn) == False) or resample:
         sd['modules'] = [str(module) for module in modules]
         sd['cross_labels'] = cross_labels
         sd['C_offdiags'] = C_offdiags
+        sd['N_n'] = N_n
         sd['ang_coord_samples'] = ang_coord_samples
         sd['cart_coord_samples'] = cart_coord_samples
 

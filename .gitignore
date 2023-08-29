@@ -13,13 +13,21 @@ random_matrix*.pkl
 nonzero*.csv
 __pycache__
 runandstore.sh
+<<<<<<< Updated upstream
 testing*
+=======
+>>>>>>> Stashed changes
 nonzero*.csv
 testing.ipynb
 *.pyc
 *.sh
+<<<<<<< Updated upstream
 init_old.py
 project_nonvectorized.py
 *copy*
 local_robustness.h5
+=======
+testing*
+*copy*
+>>>>>>> Stashed changes
 robustness.h5
