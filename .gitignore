@@ -13,7 +13,7 @@ random_matrix*.pkl
 nonzero*.csv
 __pycache__
 runandstore.sh
-testing.ipynb
+testing*
 nonzero*.csv
 testing.ipynb
 *.pyc

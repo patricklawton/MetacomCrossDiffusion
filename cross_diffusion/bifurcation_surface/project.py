@@ -179,6 +179,9 @@ def store_omega_in_doc(job):
         
         # Select adjacency matrix
         adj = adj_mats[modules==job.sp.module][0]
+        ## Get local Jacobian
+        #with job.data:
+        #    J = np.array(job.data['J']) 
 
         # Loop over cross diffusion scenarios, stored as keys in job data
         for Cij_key in cross_labels:
@@ -197,6 +200,7 @@ def store_omega_in_doc(job):
                 Cij_arr = [(int(e[0]), int(e[1])) for e in Cij_key.split(',')]
                 C_nonzero = [list(Cij) for Cij in Cij_arr] + [[i,i] for i in range(3)]
                 cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
+                #cross_limits = [get_cross_limits(ij, J) for ij in Cij_arr]
                 '''Fix: read in sample density from shared data'''
                 num_samples = int((2**len(Cij_arr) + 3)*1e2) 
 
