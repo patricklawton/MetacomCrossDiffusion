@@ -14,7 +14,7 @@ with sg.H5Store(sd_fn).open(mode='r') as sd:
     modules = np.array([i.decode() for i in sd['modules']])
     cross_labels = np.array([i.decode() for i in sd['cross_labels']])
     C_offdiags = list(sd['C_offdiags'])
-    N_n = int(N_n)
+    N_n = int(sd['N_n'])
 n_cross_arr = np.arange(0, len(C_offdiags)+1)
 # Define q values which yield mean (expected) values for each possible number of nonzero cross diffusive elements
 q_expected_arr = np.linspace(0, 1, len(C_offdiags)+1)
