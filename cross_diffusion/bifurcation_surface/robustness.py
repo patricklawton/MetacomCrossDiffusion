@@ -40,10 +40,6 @@ for n_cross in n_cross_arr:
         data[stat_key] = {}
         for rob_key in rob_keys:
             data[stat_key][rob_key] = {key: [] for key in constraint_keys}  
-            #if (stat_key == 'robustness') and (rob_key in ['local', 'spatial']):
-            #    data[stat_key][rob_key] = {key: [] for key in constraint_keys}  
-            #else:
-            #    data[stat_key][rob_key] = {key: None for key in constraint_keys}
 
     # Get robustness data for each module
     for module_idx, module in enumerate(modules):

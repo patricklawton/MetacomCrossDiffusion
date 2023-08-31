@@ -45,25 +45,22 @@ def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spati
         cart_coord_samples = np.array(sd['cart_coord_samples'][indices, :num_spatials])
     for idx, (i, j) in enumerate(C_nonzero):
         C_vec[:, 0, i, j] = cart_coord_samples[idx, :]
-    # Construct array of community jacobians across dispersal parameterizations and kappa values
-    #M_vec = np.broadcast_to(J, (C_vec.shape[0],kappa_vec.shape[1],3,3)) - kappa_vec * C_vec
-    ## Find if and where critical kappas occur
-    #kappa_cs = []
-    #any_positive = np.any(np.linalg.eigvals(M_vec).real > 0, axis=2)
-    #for vec in any_positive:
-    #    critical_indices = list(accumulate(sum(1 for _ in g) for _,g in groupby(vec)))[:-1]
-    #    critical_kappas = kappas[critical_indices]
-    #    critical_kappas = np.pad(critical_kappas.astype(float),
-    #                            (0, max_kap_crits-len(critical_indices)), 
-    #                            mode='constant', constant_values=(np.nan,))
-    #    kappa_cs.append(critical_kappas)
-    ## Store data
-    #job.data['ddi/' + cross_label] = np.any(any_positive, axis=1)
-    #job.data['kappa_cs/' + cross_label] = np.array(kappa_cs)
+    # Construct arrays of community jacobians across dispersal parameterizations and kappa values
     ddi_vec = []
+    kappa_cs = []
     for M_slice in chunk_ev_calc(C_vec, J, kappa_vec, int(1e4)):
-        ddi_vec.append(np.any(np.linalg.eigvals(M_slice).real > 0, axis=(2,1)))
+        any_positive = np.any(np.linalg.eigvals(M_slice).real > 0, axis=2)
+        ddi_vec.append(np.any(any_positive, axis=1))
+        # Find if and where critical kappas occur
+        for vec in any_positive:
+            critical_indices = list(accumulate(sum(1 for _ in g) for _,g in groupby(vec)))[:-1]
+            critical_kappas = kappas[critical_indices]
+            critical_kappas = np.pad(critical_kappas.astype(float),
+                                    (0, max_kap_crits-len(critical_indices)), 
+                                    mode='constant', constant_values=(np.nan,))
+            kappa_cs.append(critical_kappas)
     job.data['ddi/' + cross_label] = np.concatenate(ddi_vec)
+    job.data['kappa_cs/' + cross_label] = np.array(kappa_cs)
 
 @FlowProject.pre(lambda job: job.sp['local_stability'] == 'stable')
 @FlowProject.post(lambda job: job.doc.get('surface_generated'))
@@ -198,13 +195,11 @@ def store_omega_in_doc(job):
 
         # Loop over cross diffusion scenarios, stored as keys in job data
         for Cij_key in cross_labels:
-            #print('Cij:', Cij_key)
             # Set constraints on the elements of C
             # Diagonal elements (phi_(n-2), phi_(n-1)) always > 0
             diag_limits = [(0,1), (0,1), (0,1)]
             if Cij_key == 'diag':
                 C_nonzero = [[i,i] for i in range(3)]
-                #num_spatials = int(3*1e2)
                 num_spatials = get_num_spatials(0, sample_density=N_n)
                 cross_limits = []
             # Constrain off-diagonals to opposite sign of species interaction
@@ -214,7 +209,6 @@ def store_omega_in_doc(job):
                 C_nonzero = [list(Cij) for Cij in Cij_arr] + [[i,i] for i in range(3)]
                 cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
                 #cross_limits = [get_cross_limits(ij, J) for ij in Cij_arr]
-                #num_spatials = int((2**len(Cij_arr) + 3)*1e2) 
                 num_spatials = get_num_spatials(len(Cij_arr), sample_density=N_n)  
 
             # Get the stored data across dispersal parameterizations
@@ -230,11 +224,15 @@ def store_omega_in_doc(job):
             if (len(cross_limits) != 0) and np.any(np.all(np.isnan(cross_limits), axis=1)):
                 omega_constrained = np.nan
                 stdev_constrained = np.nan
+                omega_unconstrained = np.nan
+                stdev_unconstrained = np.nan
             # Otherwise calculate omega_ddi with the constraints above
             else:
                 if job.sp['local_stability'] == 'unstable':
                     omega_constrained = 0.0
                     stdev_constrained = 0.0
+                    omega_unconstrained = 0.0
+                    stdev_unconstrained = 0.0
                 else:
                     # Combine all of the constraints
                     with sg.H5Store(sd_fn).open(mode='r') as sd:
@@ -258,15 +256,13 @@ def store_omega_in_doc(job):
                         # If there's no data within the contraints, something is wrong 
                         else:
                             sys.exit('No data found within the specified constraints')
-            # Finally get the unconstrained value
-            if job.sp['local_stability'] == 'unstable':
-                omega_unconstrained = 0.0
-                stdev_unconstrained = 0.0
-            else:
-                omega_unconstrained = np.mean(ddi)
-                squared_avg = sum(ddi) / len(ddi)
-                avg_squared = sum(ddi) / len(ddi)**2  
-                stdev_unconstrained = (1/np.sqrt(len(ddi))) * np.sqrt(squared_avg - avg_squared) 
+                ## Finally get the unconstrained value
+                #if job.sp['local_stability'] == 'unstable':
+                #else:
+                    omega_unconstrained = np.mean(ddi)
+                    squared_avg = sum(ddi) / len(ddi)
+                    avg_squared = sum(ddi) / len(ddi)**2  
+                    stdev_unconstrained = (1/np.sqrt(len(ddi))) * np.sqrt(squared_avg - avg_squared) 
             
             # Store in job document
             job.doc['omega_constrained'][Cij_key] = omega_constrained 
