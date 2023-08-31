@@ -14,6 +14,7 @@ with sg.H5Store(sd_fn).open(mode='r') as sd:
     modules = np.array([i.decode() for i in sd['modules']])
     cross_labels = np.array([i.decode() for i in sd['cross_labels']])
     C_offdiags = list(sd['C_offdiags'])
+    N_n = int(N_n)
 n_cross_arr = np.arange(0, len(C_offdiags)+1)
 # Define q values which yield mean (expected) values for each possible number of nonzero cross diffusive elements
 q_expected_arr = np.linspace(0, 1, len(C_offdiags)+1)
@@ -33,7 +34,7 @@ for n_cross in n_cross_arr:
         elif (label != 'diag') and (len(label.split(',')) == n_cross):
             cross_labels_q.append(label)
     # Get the number of spatial parameterizations
-    num_spatial = get_num_spatials(n_cross)
+    num_spatial = get_num_spatials(n_cross, sample_density=N_n)
     # Initialize data
     data = {}
     for stat_key in stat_keys:
