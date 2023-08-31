@@ -4,6 +4,7 @@ from itertools import product
 from scipy.stats import skew
 from global_functions import get_cross_limits, get_num_spatials
 import os
+from tqdm import tqdm
 
 project = sg.get_project()
 
@@ -25,7 +26,7 @@ stat_keys = ['robustness', 'variance', 'skewness']
 outfn = 'robustness.h5'
 overwrite = True
 
-for n_cross in n_cross_arr:
+for n_cross in tqdm(n_cross_arr):
     # Get the labels for each cross scenario
     cross_labels_q = []
     for cross_idx, label in enumerate(cross_labels):
@@ -44,31 +45,22 @@ for n_cross in n_cross_arr:
 
     # Get robustness data for each module
     for module_idx, module in enumerate(modules):
+        print('module', module)
         # Select adjacency matrix
         adj = adj_mats[modules==module][0]
         # Filter for feasible trophic parameterizations in desired module
         #all_locals = project.find_jobs({'local_stability': {'$ne': 'infeasible'}, 'module': module})
         all_locals = project.find_jobs({'local_stability': 'stable', 'module': module})
         num_local = len(all_locals)
-        for cross_idx, cross_label in enumerate(cross_labels_q):
-            # Initialize empty matrix of dim (spatial samples X feasible local samples) for phase data;
-            # boolean because only two linearly independent phases
-            phase_data = np.zeros((num_local, num_spatial))
-            for local_idx, local in enumerate(all_locals):
-                with local.data:
-                    # Get the phase data at this trophic sample
-                    if local.sp.local_stability == 'stable':
-                        phase_data[local_idx][:] = np.array(local.data['ddi'][cross_label])
-                    elif local.sp.local_stability == 'unstable':
-                        phase_data[local_idx][:] = np.zeros(num_spatial)
-
+        for cross_idx, cross_label in tqdm(enumerate(cross_labels_q)):
+            print('cross_label', cross_label)
             # Get the spatial parameter limits for the relevant constraints
             if n_cross != 0:
                 cross_arr = [(int(e[0]), int(e[1])) for e in cross_label.split(',')]
             else:
                 cross_arr = []
             C_nonzero = [list(ij) for ij in cross_arr] + [[i,i] for i in range(3)]
-            cross_limits = [get_cross_limits(ij, local.sp.module, adj) for ij in cross_arr]
+            cross_limits = [get_cross_limits(ij, adj) for ij in cross_arr]
             # Skip any cross scenarios with invalid constraints
             if (len(cross_limits) != 0) and np.any(np.all(np.isnan(cross_limits), axis=1)):
                 continue
@@ -85,6 +77,17 @@ for n_cross in n_cross_arr:
                     all_constraints.append(coord_i < limit[1])
             constraint = np.all(all_constraints, axis=0)[0]
             spatial_indices = np.nonzero(constraint)[0]
+
+            # Initialize empty matrix of dim (spatial samples X feasible local samples) for phase data;
+            # boolean because only two linearly independent phases
+            phase_data = np.zeros((num_local, num_spatial))
+            for local_idx, local in tqdm(enumerate(all_locals)):
+                with local.data:
+                    # Get the phase data at this trophic sample
+                    if local.sp.local_stability == 'stable':
+                        phase_data[local_idx][:] = np.array(local.data['ddi'][cross_label])
+                    elif local.sp.local_stability == 'unstable':
+                        phase_data[local_idx][:] = np.zeros(num_spatial)
 
             # Calculate/store local and spatial robustness
             for rob_idx, rob_key in enumerate(['local', 'spatial']):

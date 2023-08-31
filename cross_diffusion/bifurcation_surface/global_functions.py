@@ -51,7 +51,7 @@ def spherical_to_cartesian(ang_coord_sample):
         cart_vec.append(cart_coord)
     return cart_vec
 
-def get_cross_limits(ij, module, adj):
+def get_cross_limits(ij, adj):
     '''ij -> tuple of C element indices
     '''
     i, j = ij
