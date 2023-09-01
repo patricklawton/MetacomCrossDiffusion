@@ -3,21 +3,21 @@ from scipy import optimize
 import signac as sg
 import os
 from itertools import product, combinations
-from global_functions import get_interaction_model, spherical_to_cartesian 
+from global_functions import * 
 
 # Initialize signac project 
 project = sg.init_project()
 
 # Constants
-num_parameterizations = 1000 #Per module 
+num_parameterizations = 1 #Per module 
 x0_trials = int(1e3) #Number of attempts for steady state solving 
 x0_scale = 10 #Sets range of (random) initial values drawn for steady state solving 
 param_scale = 10 #Sets range of (random) values for model parameters
 nonzero_thresh = 1e-15 #Threshold for accepting a steady state variable as nonzero
 param_labels = ['r_u', 'r_v', 'K_u', 'K_v', 'A_uv', 'A_uw', 'A_vw',
                 'B_uv', 'B_uw', 'B_vw', 'd_v', 'd_w', 'e_uv', 'e_uw', 'e_vw']
-N_n = 1e3 #Avg density of samples per 0-pi/2 interval
-total_samples = int((2**(9-3) + 3) * N_n)
+N_n = 100 #Avg density of samples per 0-pi/2 interval
+total_samples = get_num_spatials(6, sample_density=N_n)
 modules = np.array(['chain', 'exploitative', 'apparent', 'omnivory'])
 '''The order of this list defines the map from n cartesian coordinates to (n-1) spherical coordinates.
    The last two spherical coordinates always map to the three diagonal C elements, such that

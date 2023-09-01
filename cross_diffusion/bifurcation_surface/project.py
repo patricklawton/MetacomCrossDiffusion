@@ -72,23 +72,30 @@ def generate_surface(job):
     # Read in non-spatial jacobian from job data
     with job.data:
         J = np.array(job.data['J'])
+    # Select adjacency matrix
+    adj = adj_mats[modules==job.sp.module][0]
 
     # Loop over all possible combinations of cross-dispersal elements 
     for n_cross in n_cross_arr:
-        '''Fix: read in sample density from shared data'''
-        #num_samples = int((2**n_cross + 3)*1e2) if n_cross != 0 else int(3*1e2)
+        n_cross_start = timeit.default_timer()
         num_spatials = get_num_spatials(n_cross, sample_density=N_n)
+        print('n_cross={}, num_spatials={}'.format(n_cross, num_spatials))
         if n_cross == 0:
             cross_combs = [[]]
         else:
             cross_combs = [comb for comb in combinations(C_offdiags, n_cross)]
         for cross_comb in cross_combs:
+            # Skip any cross scenarios with invalid constraints
+            cross_limits = [get_cross_limits(ij, adj) for ij in cross_comb]
+            if (len(cross_limits) != 0) and np.any(np.all(np.isnan(cross_limits), axis=1)):
+                continue
+            
             # Make label for nonzero offdiagonals to store in job data
             if len(cross_comb) == 0:
                 cross_label = 'diag'
             else:
                 cross_label = ','.join([str(c[0])+str(c[1]) for c in cross_comb])
-            
+
             # Generate surface numerically
             if sp['method'] == 'numeric':
                 get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spatials, sd_fn)
@@ -171,9 +178,10 @@ def generate_surface(job):
                         job.data[key+'/'+cross_label] = np.array(item)
             else:
                 sys.exit('Invalid critical kappa computation method')
-
+        
+        n_cross_stop = timeit.default_timer(); print('ncross time:', n_cross_stop - n_cross_start)
     job.doc['surface_generated'] = True
-    #stop = timeit.default_timer(); print('Time:', stop - start)
+    stop = timeit.default_timer(); print('Total time:', stop - start)
 
 @FlowProject.pre(lambda job: job.doc.get('surface_generated') or (job.sp['local_stability'] == 'unstable'))
 #@FlowProject.pre(lambda job: job.doc.get('surface_generated'))

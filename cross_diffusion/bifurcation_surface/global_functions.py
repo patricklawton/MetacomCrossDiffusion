@@ -95,4 +95,6 @@ def get_num_spatials(n_cross, sample_density=1e2):
         num_spatials = int(3 * sample_density)
     else:
         num_spatials = int((2**n_cross + 3)*sample_density)
+    #num_spatials = int(sample_density * (2**n_cross + 3)**2)
+    #num_spatials = int(sample_density * (n_cross + 3)**3)
     return num_spatials
