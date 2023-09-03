@@ -254,16 +254,16 @@ def store_omega_in_doc(job):
                         #print(all_constraints)
                         constraint = np.all(all_constraints, axis=0)[0]
                         #print(constraint)
-                        # Get the mean value of the data within the constraints
-                        if sum(constraint) != 0:
-                            omega_constrained = np.mean(ddi[constraint])
-                            squared_avg = sum(ddi[constraint]) / len(ddi[constraint])
-                            avg_squared = sum(ddi[constraint])**2 / len(ddi[constraint])**2  
-                            stdev_constrained = (1/np.sqrt(len(ddi[constraint]))) * np.sqrt(squared_avg - avg_squared) 
-                            #sys.exit()
-                        # If there's no data within the contraints, something is wrong 
-                        else:
-                            sys.exit('No data found within the specified constraints')
+                    # Get the mean value of the data within the constraints
+                    if sum(constraint) != 0:
+                        omega_constrained = np.mean(ddi[constraint])
+                        squared_avg = sum(ddi[constraint]) / len(ddi[constraint])
+                        avg_squared = sum(ddi[constraint])**2 / len(ddi[constraint])**2  
+                        stdev_constrained = (1/np.sqrt(len(ddi[constraint]))) * np.sqrt(squared_avg - avg_squared) 
+                        #sys.exit()
+                    # If there's no data within the contraints, something is wrong 
+                    else:
+                        sys.exit('No data found within the specified constraints')
                 ## Finally get the unconstrained value
                 #if job.sp['local_stability'] == 'unstable':
                 #else:

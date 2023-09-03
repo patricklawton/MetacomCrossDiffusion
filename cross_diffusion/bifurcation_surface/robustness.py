@@ -5,6 +5,7 @@ from scipy.stats import skew
 from global_functions import get_cross_limits, get_num_spatials
 import os
 from tqdm import tqdm
+import sys
 
 project = sg.get_project()
 
@@ -26,100 +27,114 @@ stat_keys = ['robustness', 'variance', 'skewness']
 outfn = 'robustness.h5'
 overwrite = True
 
-for n_cross in tqdm(n_cross_arr):
-    # Get the labels for each cross scenario
-    cross_labels_q = []
-    for cross_idx, label in enumerate(cross_labels):
-        if (label == 'diag') and (n_cross == 0):
-            cross_labels_q.append(label)
-        elif (label != 'diag') and (len(label.split(',')) == n_cross):
-            cross_labels_q.append(label)
-    # Get the number of spatial parameterizations
-    num_spatial = get_num_spatials(n_cross, sample_density=N_n)
-    # Initialize data
-    data = {}
-    for stat_key in stat_keys:
-        data[stat_key] = {}
-        for rob_key in rob_keys:
-            data[stat_key][rob_key] = {key: [] for key in constraint_keys}  
-
+# Decide whether or not to run
+file_check = os.path.isfile(outfn)
+if os.path.isfile(outfn) and (overwrite == False):
+    sys.exit('Delete saved data or set overwrite to True')
+with sg.H5Store(outfn).open(mode='w') as output:
     # Get robustness data for each module
     for module_idx, module in enumerate(modules):
-        print('module', module)
+        # Initialize data
+        data = {}
+        for stat_key in stat_keys:
+            data[stat_key] = {}
+            for rob_key in rob_keys:
+                if stat_key == 'robustness':
+                    data[stat_key][rob_key] = {key: [[] for n in n_cross_arr] for key in constraint_keys}  
+                elif (stat_key == 'variance') and (rob_key in ['local', 'spatial']):
+                    data[stat_key][rob_key] = {key: [] for key in constraint_keys}
+                elif (stat_key == 'variance') and (rob_key == 'total'):
+                    ...
+                elif (stat_key == 'skewness') and (rob_key in ['local', 'spatial']):
+                    data[stat_key][rob_key] = {key: [] for key in constraint_keys}
         # Select adjacency matrix
+        print('module', module)
         adj = adj_mats[modules==module][0]
         # Filter for feasible trophic parameterizations in desired module
-        #all_locals = project.find_jobs({'local_stability': {'$ne': 'infeasible'}, 'module': module})
         all_locals = project.find_jobs({'local_stability': 'stable', 'module': module})
         num_local = len(all_locals)
-        for cross_idx, cross_label in tqdm(enumerate(cross_labels_q)):
-            print('cross_label', cross_label)
-            # Get the spatial parameter limits for the relevant constraints
-            if n_cross != 0:
-                cross_arr = [(int(e[0]), int(e[1])) for e in cross_label.split(',')]
-            else:
-                cross_arr = []
-            C_nonzero = [list(ij) for ij in cross_arr] + [[i,i] for i in range(3)]
-            cross_limits = [get_cross_limits(ij, adj) for ij in cross_arr]
-            # Skip any cross scenarios with invalid constraints
-            if (len(cross_limits) != 0) and np.any(np.all(np.isnan(cross_limits), axis=1)):
-                continue
-            diag_limits = [(0,1), (0,1), (0,1)]
-            limits = cross_limits + diag_limits
+        for n_cross in tqdm(n_cross_arr):
+            # Get the number of spatial parameterizations
+            num_spatial = get_num_spatials(n_cross, sample_density=N_n)
+            # Get the labels for each cross scenario
+            cross_labels_q = []
+            for cross_idx, label in enumerate(cross_labels):
+                if (label == 'diag') and (n_cross == 0):
+                    cross_labels_q.append(label)
+                elif (label != 'diag') and (len(label.split(',')) == n_cross):
+                    cross_labels_q.append(label)
+            # Loop over cross diffusive scenarios
+            for cross_idx, cross_label in tqdm(enumerate(cross_labels_q)):
+                print('cross_label', cross_label)
+                # Get the spatial parameter limits for the relevant constraints
+                if n_cross != 0:
+                    cross_arr = [(int(e[0]), int(e[1])) for e in cross_label.split(',')]
+                else:
+                    cross_arr = []
+                C_nonzero = [list(ij) for ij in cross_arr] + [[i,i] for i in range(3)]
+                cross_limits = [get_cross_limits(ij, adj) for ij in cross_arr]
+                # Skip any cross scenarios with invalid constraints
+                if (len(cross_limits) != 0) and np.any(np.all(np.isnan(cross_limits), axis=1)):
+                    continue
+                diag_limits = [(0,1), (0,1), (0,1)]
+                limits = cross_limits + diag_limits
 
-            # Find spatial samples satisfying constraints
-            all_constraints = []
-            with sg.H5Store(sd_fn).open(mode='r') as sd:
-                for i, limit in enumerate(limits):
-                    coord_idx = np.nonzero([list(ij) == C_nonzero[i] for ij in C_elements])[0]
-                    coord_i = np.array(sd['cart_coord_samples'][coord_idx, :num_spatial])
-                    all_constraints.append(coord_i > limit[0])
-                    all_constraints.append(coord_i < limit[1])
-            constraint = np.all(all_constraints, axis=0)[0]
-            spatial_indices = np.nonzero(constraint)[0]
+                # Find spatial samples satisfying constraints
+                all_constraints = []
+                with sg.H5Store(sd_fn).open(mode='r') as sd:
+                    for i, limit in enumerate(limits):
+                        coord_idx = np.nonzero([list(ij) == C_nonzero[i] for ij in C_elements])[0]
+                        coord_i = np.array(sd['cart_coord_samples'][coord_idx, :num_spatial])
+                        all_constraints.append(coord_i > limit[0])
+                        all_constraints.append(coord_i < limit[1])
+                constraint = np.all(all_constraints, axis=0)[0]
+                spatial_indices = np.nonzero(constraint)[0]
 
-            # Initialize empty matrix of dim (spatial samples X feasible local samples) for phase data;
-            # boolean because only two linearly independent phases
-            phase_data = np.zeros((num_local, num_spatial))
-            for local_idx, local in tqdm(enumerate(all_locals)):
-                with local.data:
-                    # Get the phase data at this trophic sample
-                    if local.sp.local_stability == 'stable':
-                        phase_data[local_idx][:] = np.array(local.data['ddi'][cross_label])
-                    elif local.sp.local_stability == 'unstable':
-                        phase_data[local_idx][:] = np.zeros(num_spatial)
+                # Initialize empty matrix of dim (spatial samples X feasible local samples) for phase data;
+                # boolean because only two linearly independent phases
+                phase_data = np.zeros((num_local, num_spatial))
+                for local_idx, local in tqdm(enumerate(all_locals)):
+                    with local.data:
+                        # Get the phase data at this trophic sample
+                        if local.sp.local_stability == 'stable':
+                            phase_data[local_idx][:] = np.array(local.data['ddi'][cross_label])
+                        elif local.sp.local_stability == 'unstable':
+                            phase_data[local_idx][:] = np.zeros(num_spatial)
 
-            # Calculate/store local and spatial robustness
-            for rob_idx, rob_key in enumerate(['local', 'spatial']):
-                data['robustness'][rob_key]['unconstrained'].extend(np.mean(phase_data, axis=rob_idx))
-                data['robustness'][rob_key]['constrained'].extend(np.mean(phase_data[:,spatial_indices], axis=rob_idx))
-            data['robustness']['total']['unconstrained'].append(np.mean(phase_data))
-            data['robustness']['total']['constrained'].append(np.mean(phase_data[:,spatial_indices]))
-    data['robustness']['total']['unconstrained'] = np.mean(data['robustness']['total']['unconstrained'])
-    data['robustness']['total']['constrained'] = np.mean(data['robustness']['total']['constrained'])
+                # Calculate local and spatial robustness
+                for rob_idx, rob_key in enumerate(['local', 'spatial']):
+                    data['robustness'][rob_key]['unconstrained'][n_cross].extend(np.mean(phase_data, axis=rob_idx))
+                    data['robustness'][rob_key]['constrained'][n_cross].extend(np.mean(phase_data[:,spatial_indices], axis=rob_idx))
+                data['robustness']['total']['unconstrained'][n_cross].append(np.mean(phase_data))
+                data['robustness']['total']['constrained'][n_cross].append(np.mean(phase_data[:,spatial_indices]))
+            # Store robustness distributions
+            for rob_key, cons_key in product(['local', 'spatial'], constraint_keys):
+                data_key = '{}/robustness/{}/{}/{}'.format(module, rob_key, cons_key, str(n_cross))
+                output[data_key] = np.array(data['robustness'][rob_key][cons_key][n_cross])
+            # Take the average over cross scenarios for the total robustness
+            for cons_key in constraint_keys: 
+                data['robustness']['total'][cons_key][n_cross] = np.mean(data['robustness']['total'][cons_key][n_cross])
 
-    # Calculate/store variance
-    for rob_key, cons_key in product(['local', 'spatial'], constraint_keys):
-        data['variance'][rob_key][cons_key] = np.var(data['robustness'][rob_key][cons_key]) 
+            # Calculate variance and skewness
+            for rob_key, cons_key in product(['local', 'spatial'], constraint_keys):
+                variance = np.var(data['robustness'][rob_key][cons_key][n_cross])
+                data['variance'][rob_key][cons_key].append(variance) 
+                skewness = skew(data['robustness'][rob_key][cons_key][n_cross], nan_policy='raise')
+                data['skewness'][rob_key][cons_key].append(skewness) 
 
-    # Calculate/store skewness
-    for rob_key, cons_key in product(['local', 'spatial'], constraint_keys):
-        data['skewness'][rob_key][cons_key] = skew(data['robustness'][rob_key][cons_key], nan_policy='raise') 
+        for stat_key, cons_key in product(stat_keys, constraint_keys):
+            if stat_key == 'robustness':
+                data_key = '{}/{}/total/{}'.format(module, stat_key, cons_key)
+                output[data_key] = np.array(data[stat_key]['total'][cons_key])
+            elif stat_key == 'variance':
+                for rob_key in ['local', 'spatial']:
+                    data_key = '{}/{}/{}/{}'.format(module, stat_key, rob_key, cons_key)
+                    output[data_key] = np.array(data[stat_key][rob_key][cons_key])
+            elif stat_key == 'skewness':
+                for rob_key in ['local', 'spatial']:
+                    data_key = '{}/{}/{}/{}'.format(module, stat_key, rob_key, cons_key)
+                    output[data_key] = np.array(data[stat_key][rob_key][cons_key])
 
-    file_check = os.path.isfile(outfn)
-    if (n_cross==0) and (file_check==False):
-        mode = 'w'
-    elif (n_cross==0) and (overwrite==True):
-        mode = 'w'
-    else:
-        mode = 'r+'
-    with sg.H5Store(outfn).open(mode=mode) as output:
-        for stat_key, rob_key, cons_key in product(stat_keys, rob_keys, constraint_keys):
-            data_key = '{}/{}/{}/{}'.format(str(n_cross), stat_key, rob_key, cons_key)
-            if (stat_key == 'robustness') and (rob_key in ['local', 'spatial']):
-                output[data_key] = np.array(data[stat_key][rob_key][cons_key])
-            else:
-                try:
-                    output[data_key] = float(data[stat_key][rob_key][cons_key])
-                except:
-                    output[data_key] = None
+## Now write the data over all modules
+#with sg.H5Store(outfn).open(mode='r+') as output:
+#    ...
