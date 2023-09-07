@@ -51,11 +51,18 @@ with sg.H5Store(outfn).open(mode='w') as output:
         print('module', module)
         adj = adj_mats[modules==module][0]
         # Filter for feasible trophic parameterizations in desired module
-        all_locals = project.find_jobs({'local_stability': 'stable', 'module': module})
+        all_locals = project.find_jobs({'local_stability': {'$ne': 'infeasible'}, 'module': module})
         num_local = len(all_locals)
+        # Create filter for locally stable parameterizations
+        locally_stable = np.array([i for i, local in enumerate(all_locals) if local.sp.local_stability == 'stable'])
+        # Store local robustness of unstable phase
+        num_unstable = len(project.find_jobs({'module': module,'local_stability': 'unstable'}))
+        output['{}/robustness/unstable'.format(module)] = float(num_unstable / len(all_locals))
+
         for n_cross in tqdm(n_cross_arr):
             # Get the number of spatial parameterizations
             num_spatial = get_num_spatials(n_cross, sample_density=N_n)
+
             # Get the labels for each cross scenario
             cross_labels_q = []
             for cross_idx, label in enumerate(cross_labels):
@@ -63,6 +70,7 @@ with sg.H5Store(outfn).open(mode='w') as output:
                     cross_labels_q.append(label)
                 elif (label != 'diag') and (len(label.split(',')) == n_cross):
                     cross_labels_q.append(label)
+
             # Loop over cross diffusive scenarios
             for cross_idx, cross_label in tqdm(enumerate(cross_labels_q)):
                 print('cross_label', cross_label)
@@ -101,16 +109,20 @@ with sg.H5Store(outfn).open(mode='w') as output:
                         elif local.sp.local_stability == 'unstable':
                             phase_data[local_idx][:] = np.zeros(num_spatial)
 
-                # Calculate local and spatial robustness
+                # Calculate local and spatial robustness (exclude locally unstable webs)
                 for rob_idx, rob_key in enumerate(['local', 'spatial']):
-                    data['robustness'][rob_key]['unconstrained'][n_cross].extend(np.mean(phase_data, axis=rob_idx))
-                    data['robustness'][rob_key]['constrained'][n_cross].extend(np.mean(phase_data[:,spatial_indices], axis=rob_idx))
+                    data['robustness'][rob_key]['unconstrained'][n_cross].extend(np.mean(phase_data[locally_stable[:,None],spatial_indices], axis=rob_idx))
+                    data['robustness'][rob_key]['constrained'][n_cross].extend(np.mean(phase_data[locally_stable[:,None],spatial_indices], axis=rob_idx))
+
+                # Calculate total robustness (include locally unstable webs)
                 data['robustness']['total']['unconstrained'][n_cross].append(np.mean(phase_data))
                 data['robustness']['total']['constrained'][n_cross].append(np.mean(phase_data[:,spatial_indices]))
+
             # Store robustness distributions
             for rob_key, cons_key in product(['local', 'spatial'], constraint_keys):
                 data_key = '{}/robustness/{}/{}/{}'.format(module, rob_key, cons_key, str(n_cross))
                 output[data_key] = np.array(data['robustness'][rob_key][cons_key][n_cross])
+
             # Take the average over cross scenarios for the total robustness
             for cons_key in constraint_keys: 
                 data['robustness']['total'][cons_key][n_cross] = np.mean(data['robustness']['total'][cons_key][n_cross])
@@ -122,6 +134,7 @@ with sg.H5Store(outfn).open(mode='w') as output:
                 skewness = skew(data['robustness'][rob_key][cons_key][n_cross], nan_policy='raise')
                 data['skewness'][rob_key][cons_key].append(skewness) 
 
+        # Store total robustness, variance, and skewness
         for stat_key, cons_key in product(stat_keys, constraint_keys):
             if stat_key == 'robustness':
                 data_key = '{}/{}/total/{}'.format(module, stat_key, cons_key)

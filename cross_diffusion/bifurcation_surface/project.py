@@ -215,7 +215,7 @@ def store_omega_in_doc(job):
                 # Convert key to a list of off-diagonal C element indices
                 Cij_arr = [(int(e[0]), int(e[1])) for e in Cij_key.split(',')]
                 C_nonzero = [list(Cij) for Cij in Cij_arr] + [[i,i] for i in range(3)]
-                cross_limits = [get_cross_limits(ij, job.sp.module, adj) for ij in Cij_arr]
+                cross_limits = [get_cross_limits(ij, adj) for ij in Cij_arr]
                 #cross_limits = [get_cross_limits(ij, J) for ij in Cij_arr]
                 num_spatials = get_num_spatials(len(Cij_arr), sample_density=N_n)  
 
