@@ -62,6 +62,8 @@ with sg.H5Store(outfn).open(mode='w') as output:
         for n_cross in tqdm(n_cross_arr):
             # Get the number of spatial parameterizations
             num_spatial = get_num_spatials(n_cross, sample_density=N_n)
+            # Create list with all spatial indices for slicing later
+            all_spatial = np.arange(num_spatial)
 
             # Get the labels for each cross scenario
             cross_labels_q = []
@@ -96,7 +98,7 @@ with sg.H5Store(outfn).open(mode='w') as output:
                         all_constraints.append(coord_i > limit[0])
                         all_constraints.append(coord_i < limit[1])
                 constraint = np.all(all_constraints, axis=0)[0]
-                spatial_indices = np.nonzero(constraint)[0]
+                constraint = np.nonzero(constraint)[0]
 
                 # Initialize empty matrix of dim (spatial samples X feasible local samples) for phase data;
                 # boolean because only two linearly independent phases
@@ -111,12 +113,12 @@ with sg.H5Store(outfn).open(mode='w') as output:
 
                 # Calculate local and spatial robustness (exclude locally unstable webs)
                 for rob_idx, rob_key in enumerate(['local', 'spatial']):
-                    data['robustness'][rob_key]['unconstrained'][n_cross].extend(np.mean(phase_data[locally_stable[:,None],spatial_indices], axis=rob_idx))
-                    data['robustness'][rob_key]['constrained'][n_cross].extend(np.mean(phase_data[locally_stable[:,None],spatial_indices], axis=rob_idx))
+                    data['robustness'][rob_key]['unconstrained'][n_cross].extend(np.mean(phase_data[locally_stable[:,None],all_spatial], axis=rob_idx))
+                    data['robustness'][rob_key]['constrained'][n_cross].extend(np.mean(phase_data[locally_stable[:,None],constraint], axis=rob_idx))
 
                 # Calculate total robustness (include locally unstable webs)
                 data['robustness']['total']['unconstrained'][n_cross].append(np.mean(phase_data))
-                data['robustness']['total']['constrained'][n_cross].append(np.mean(phase_data[:,spatial_indices]))
+                data['robustness']['total']['constrained'][n_cross].append(np.mean(phase_data[:,constraint]))
 
             # Store robustness distributions
             for rob_key, cons_key in product(['local', 'spatial'], constraint_keys):
