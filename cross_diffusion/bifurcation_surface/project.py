@@ -27,7 +27,7 @@ def chunk_ev_calc(C_vec, J, kappa_vec, chunksize):
             length = C_vec.shape[0] - start
         else:
             length = chunksize
-        M_slice = np.broadcast_to(J, (length,kappa_vec.shape[1],3,3)) - kappa_vec * C_vec[start:start + chunksize]
+        M_slice = np.broadcast_to(J, (length,kappa_vec.shape[1],3,3)) + kappa_vec * C_vec[start:start + chunksize]
         yield M_slice
 
 def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spatials, sd_fn):
@@ -79,7 +79,7 @@ def generate_surface(job):
     for n_cross in n_cross_arr:
         n_cross_start = timeit.default_timer()
         num_spatials = get_num_spatials(n_cross, sample_density=N_n)
-        print('n_cross={}, num_spatials={}'.format(n_cross, num_spatials))
+        #print('n_cross={}, num_spatials={}'.format(n_cross, num_spatials))
         if n_cross == 0:
             cross_combs = [[]]
         else:
@@ -179,9 +179,9 @@ def generate_surface(job):
             else:
                 sys.exit('Invalid critical kappa computation method')
         
-        n_cross_stop = timeit.default_timer(); print('ncross time:', n_cross_stop - n_cross_start)
+        #n_cross_stop = timeit.default_timer(); print('ncross time:', n_cross_stop - n_cross_start)
     job.doc['surface_generated'] = True
-    stop = timeit.default_timer(); print('Total time:', stop - start)
+    #stop = timeit.default_timer(); print('Total time:', stop - start)
 
 @FlowProject.pre(lambda job: job.doc.get('surface_generated') or (job.sp['local_stability'] == 'unstable'))
 #@FlowProject.pre(lambda job: job.doc.get('surface_generated'))

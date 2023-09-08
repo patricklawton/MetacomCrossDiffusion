@@ -9,7 +9,7 @@ from global_functions import *
 project = sg.init_project()
 
 # Constants
-num_parameterizations = 2500 #Per module 
+num_parameterizations = 100 #Per module 
 x0_trials = int(1e3) #Number of attempts for steady state solving 
 x0_scale = 10 #Sets range of (random) initial values drawn for steady state solving 
 param_scale = 10 #Sets range of (random) values for model parameters
