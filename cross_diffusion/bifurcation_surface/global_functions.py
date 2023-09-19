@@ -64,29 +64,7 @@ def get_cross_limits(ij, adj):
     # If no interaction, no dispersal response
     else:
         lim = (np.nan, np.nan)
-    ## Some special cases where Cij != 0 for indirect interactions
-    #else:
-    #    # Negative interaction btwn predators in exploitative -> Cij > 0
-    #    if (module == 'exploitative') and (ij in [(1,2), (2,1)]):
-    #        lim = (0, 1)
-    #    # Negative interaction btwn prey in apparent -> Cij > 0
-    #    elif (module == 'apparent') and (ij in [(0,1), (1,0)]):
-    #        lim = (0, 1)
-    #    # For all cases besides those specified below, i.e. Cuw and Cwu in chain module, Cij = 0
-    #    else:
-    #        lim = (np.nan, np.nan)
     return lim
-#def get_cross_limits(ij, J):
-#    i, j = ij
-#    # If no interaction, no dispersal response
-#    if J[i,j] == 0:
-#        lim = (np.nan, np.nan)
-#    # Prey tracking
-#    elif np.sign(J[i,j]) > 0:
-#        lim = (-1, 0)
-#    # Predator avoidance
-#    else: 
-#        lim = (0, 1)
 
 def get_num_spatials(n_cross, sample_density=1e2):
     '''Get the number of spatial parameterizations given a value of 
