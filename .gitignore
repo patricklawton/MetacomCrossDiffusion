@@ -7,28 +7,10 @@
 *Nn1e2.pkl
 workspace*
 *test.pkl
-random_matrix*.pkl
-*.docx
-nonzero*.csv
-__pycache__
-runandstore.sh
-<<<<<<< Updated upstream
-testing*
-=======
->>>>>>> Stashed changes
-nonzero*.csv
 testing.ipynb
-*.pyc
-*.sh
-<<<<<<< Updated upstream
-init_old.py
-project_nonvectorized.py
-*copy*
-local_robustness.h5
-=======
-testing*
-*copy*
->>>>>>> Stashed changes
-robustness.h5
+rob_org.txt
 robustness*.h5
-shared_data*.h5
+*pycache*
+shared_data.h5
+signac.rc
+signac_project_document.json
