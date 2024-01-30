@@ -51,9 +51,10 @@ def spherical_to_cartesian(ang_coord_sample):
         cart_vec.append(cart_coord)
     return cart_vec
 
+# Function to get the limits of cross diffusive rates, in cartesian corrdinates
 def get_cross_limits(ij, adj):
     '''ij -> tuple of C element indices
-    '''
+       adj -> adjacency matrix'''
     i, j = ij
     # j feeds on i -> Cij > 0 (predator avoidance)
     if adj[i,j] == 1.0:
@@ -69,11 +70,5 @@ def get_cross_limits(ij, adj):
 def get_num_spatials(n_cross, sample_density=1e2):
     '''Get the number of spatial parameterizations given a value of 
        n_cross and desired density per sign permutation'''
-    ### Use this for smaller test runs
-    if n_cross == 0:
-        num_spatials = int(3 * sample_density)
-    else:
-        num_spatials = int((2**n_cross + 3)*sample_density)
-    ### Use this for larger runs (as done for main text figures)
-    #num_spatials = int(sample_density * (n_cross + 3)**2.5)
+    num_spatials = int(sample_density * (n_cross + 3)**2.5)
     return num_spatials

@@ -31,6 +31,9 @@ def chunk_ev_calc(C_vec, J, kappa_vec, chunksize):
         yield M_slice
 
 def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spatials, sd_fn):
+    '''Get the boolean vector for pattern forming parameterizations and their corresponding
+       critical kappa values. Done so numerically, utilizing numpy array manuipulation. To
+       be called within generate_surface below.'''
     # Define array of kappa values to compute eigenvalues at
     kmax, step = (100, 0.1)
     kappas = np.arange(0, kmax+step, step)
@@ -66,6 +69,9 @@ def get_integrand_numeric(job, J, cross_label, cross_comb, C_offdiags, num_spati
 @FlowProject.post(lambda job: job.doc.get('surface_generated'))
 @FlowProject.operation
 def generate_surface(job):
+    '''Iterate over the possible cross diffusive scenarios to generate and store the
+       dynamical behavior (i.e. pattern forming or not) at each locally stable 
+       parameter combination.'''
     start = timeit.default_timer()
     sp = job.sp
     

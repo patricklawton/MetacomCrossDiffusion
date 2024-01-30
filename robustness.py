@@ -32,7 +32,7 @@ file_check = os.path.isfile(outfn)
 if os.path.isfile(outfn) and (overwrite == False):
     sys.exit('Delete saved data or set overwrite to True')
 with sg.H5Store(outfn).open(mode='w') as output:
-    # Get robustness data for each module
+    # Get robustness data for each motif
     for module_idx, module in enumerate(modules):
         # Initialize data
         data = {}

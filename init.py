@@ -9,23 +9,23 @@ from global_functions import *
 project = sg.init_project()
 
 # Constants
-num_parameterizations = 2500 #Per module 
+num_parameterizations = 2500 #Per food web motif 
 x0_trials = int(1e3) #Number of attempts for steady state solving 
 x0_scale = 10 #Sets range of (random) initial values drawn for steady state solving 
 param_scale = 10 #Sets range of (random) values for model parameters
 nonzero_thresh = 1e-15 #Threshold for accepting a steady state variable as nonzero
 param_labels = ['r_u', 'r_v', 'K_u', 'K_v', 'A_uv', 'A_uw', 'A_vw',
                 'B_uv', 'B_uw', 'B_vw', 'd_v', 'd_w', 'e_uv', 'e_uw', 'e_vw']
-N_n = 100 #Avg density of samples per 0-pi/2 interval
+N_n = 100 #Avg density of spatial samples per 0 - pi/2 interval
 total_samples = get_num_spatials(6, sample_density=N_n)
 modules = np.array(['chain', 'exploitative', 'apparent', 'omnivory'])
-'''The order of this list defines the map from n cartesian coordinates to (n-1) spherical coordinates.
+'''The order of the following list defines the map from n cartesian coordinates to (n-1) spherical coordinates.
    The last two spherical coordinates always map to the three diagonal C elements, such that
    phi_(n-2) -> C[0,0], phi_(n-1) -> (C[1,1], C[2,2])'''
 C_offdiags = np.array([(0,1), (0,2),
                        (1,0), (1,2),
                        (2,0), (2,1)])
-cross_labels = []
+cross_labels = [] #String labels for each cross-diffusion scenario
 for n_cross in np.arange(0, len(C_offdiags)+1):
     if n_cross == 0:
         cross_combs = [[]]
@@ -36,9 +36,10 @@ for n_cross in np.arange(0, len(C_offdiags)+1):
         if len(cross_comb) == 0:
             cross_label = 'diag'
         else:
+            # Label as responding species followed by species responded to, comma sep
             cross_label = ','.join([str(c[0])+str(c[1]) for c in cross_comb])
         cross_labels.append(cross_label)
-resample = False
+resample = False #Whether or not to overwrite the spatial param samples
 
 # Sample dispersal parameters and write to shared data
 sd_fn = project.fn('shared_data.h5')
